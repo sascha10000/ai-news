@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+
+{% block title %}Login - AI News Admin{% endblock %}
+
+{% block content %}
+<div class="login-container">
+    <h1>Admin Login</h1>
+
+    {% if let Some(msg) = error %}
+    <div class="error">{{ msg }}</div>
+    {% endif %}
+
+    <form action="/admin/login" method="post" class="login-form">
+        <label for="username">Username</label>
+        <input type="text" id="username" name="username" required autofocus>
+
+        <label for="password">Password</label>
+        <input type="password" id="password" name="password" required>
+
+        <button type="submit" class="btn btn-primary">Log in</button>
+    </form>
+</div>
+{% endblock %}

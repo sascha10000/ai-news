@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+
+{% block title %}{{ article.title }} - AI News{% endblock %}
+
+{% block content %}
+<article class="article-detail">
+    <h1>{{ article.title }}</h1>
+    <div class="article-meta">
+        <time>{{ article.formatted_published_at() }}</time>
+    </div>
+
+    <div class="article-body">
+        {% for sentence in sentences %}
+        <span class="sentence">{{ sentence.content }}{% for source in sentence.sources %}<sup><a href="{{ source.url }}" target="_blank" rel="noopener" title="{{ source.title }}">[{{ source.id }}]</a></sup>{% endfor %}</span>
+        {% endfor %}
+    </div>
+
+    <section class="sources">
+        <h2>Sources</h2>
+        <ol>
+            {% for source in all_sources %}
+            <li id="source-{{ source.id }}">
+                <a href="{{ source.url }}" target="_blank" rel="noopener">{{ source.title }}</a>
+                <span class="source-id">[{{ source.id }}]</span>
+                {% if let Some(date) = source.formatted_date() %}
+                <time class="source-date">{{ date }}</time>
+                {% endif %}
+            </li>
+            {% endfor %}
+        </ol>
+    </section>
+</article>
+
+<a href="/" class="back-link">&larr; Back to all articles</a>
+{% endblock %}

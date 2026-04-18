@@ -1,0 +1,44 @@
+use std::env;
+
+pub struct Config {
+    pub database_url: String,
+    pub ollama_host: String,
+    pub ollama_model: String,
+    pub fetch_interval_minutes: u32,
+    pub generate_interval_hours: u32,
+    pub server_host: String,
+    pub server_port: u16,
+    pub admin_username: String,
+    pub admin_password: String,
+}
+
+impl Config {
+    pub fn from_env() -> Self {
+        Self {
+            database_url: env::var("DATABASE_URL")
+                .unwrap_or_else(|_| "sqlite:data.db?mode=rwc".to_string()),
+            ollama_host: env::var("OLLAMA_HOST")
+                .unwrap_or_else(|_| "http://localhost:11434".to_string()),
+            ollama_model: env::var("OLLAMA_MODEL")
+                .unwrap_or_else(|_| "llama3.1:8b".to_string()),
+            fetch_interval_minutes: env::var("FETCH_INTERVAL_MINUTES")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(30),
+            generate_interval_hours: env::var("GENERATE_INTERVAL_HOURS")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(2),
+            server_host: env::var("SERVER_HOST")
+                .unwrap_or_else(|_| "127.0.0.1".to_string()),
+            server_port: env::var("SERVER_PORT")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(3000),
+            admin_username: env::var("ADMIN_USERNAME")
+                .unwrap_or_else(|_| "admin".to_string()),
+            admin_password: env::var("ADMIN_PASSWORD")
+                .expect("ADMIN_PASSWORD must be set in .env"),
+        }
+    }
+}

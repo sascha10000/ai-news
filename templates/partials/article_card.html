@@ -1,0 +1,8 @@
+<div class="article-card">
+    {% if let Some(cat) = article.category %}
+    <a href="/?category={{ cat }}" class="card-category">{{ cat }}</a>
+    {% endif %}
+    <h2><a href="/article/{{ article.slug }}">{{ article.title }}</a></h2>
+    <p class="article-summary">{{ article.summary.as_deref().unwrap_or("") }}</p>
+    <time>{{ article.formatted_published_at() }}</time>
+</div>

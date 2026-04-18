@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+
+{% block title %}Admin - AI News{% endblock %}
+
+{% block content %}
+<div class="admin-header">
+    <h1>Admin Dashboard</h1>
+    <form action="/admin/logout" method="post">
+        <button type="submit" class="btn btn-sm">Logout</button>
+    </form>
+</div>
+
+<section class="admin-section">
+    <h2>Actions</h2>
+    <div class="actions">
+        <button hx-post="/api/fetch-all"
+                hx-target="#fetch-result"
+                hx-indicator="#fetch-spinner"
+                class="btn btn-primary">
+            Fetch All Feeds
+        </button>
+        <button hx-post="/api/generate"
+                hx-target="#gen-result"
+                hx-indicator="#gen-spinner"
+                class="btn btn-primary">
+            Generate Articles
+        </button>
+    </div>
+    <div id="fetch-result"></div>
+    <span id="fetch-spinner" class="htmx-indicator">Fetching...</span>
+    <div id="gen-result"></div>
+    <span id="gen-spinner" class="htmx-indicator">Generating (this may take a while)...</span>
+</section>
+
+<section class="admin-section">
+    <h2>RSS Feeds</h2>
+    <form action="/admin/feeds" method="post" class="add-feed-form">
+        <input type="text" name="name" placeholder="Feed name" required>
+        <input type="url" name="url" placeholder="https://example.com/rss" required>
+        <button type="submit" class="btn">Add Feed</button>
+    </form>
+
+    <table class="feeds-table">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>URL</th>
+                <th>Articles</th>
+                <th>Last Fetched</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in feeds %}
+            <tr>
+                <td>{{ item.feed.name }}</td>
+                <td class="url-cell">{{ item.feed.url }}</td>
+                <td>{{ item.article_count }}</td>
+                <td id="feed-status-{{ item.feed.id }}">
+                    {{ item.feed.last_fetched_at.as_deref().unwrap_or("Never") }}
+                </td>
+                <td class="actions-cell">
+                    <button hx-post="/api/fetch/{{ item.feed.id }}"
+                            hx-target="#feed-status-{{ item.feed.id }}"
+                            class="btn btn-sm">
+                        Fetch
+                    </button>
+                    <form action="/admin/feeds/{{ item.feed.id }}/delete" method="post" style="display:inline">
+                        <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+
+<section class="admin-section">
+    <div class="section-header">
+        <h2>Draft Articles</h2>
+        {% if !drafts.is_empty() %}
+        <button hx-post="/api/articles/publish-all"
+                hx-target="#publish-all-result"
+                hx-confirm="Publish all draft articles?"
+                class="btn btn-sm btn-success">
+            Publish All
+        </button>
+        {% endif %}
+    </div>
+    <div id="publish-all-result"></div>
+    {% if drafts.is_empty() %}
+    <p class="empty">No drafts. Generate some articles first.</p>
+    {% else %}
+    <table class="drafts-table">
+        <thead>
+            <tr>
+                <th>Title</th>
+                <th>Category</th>
+                <th>Generated</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for draft in drafts %}
+            <tr>
+                <td><a href="/article/{{ draft.slug }}">{{ draft.title }}</a></td>
+                <td id="draft-category-{{ draft.id }}">
+                    <form hx-post="/api/article/{{ draft.id }}/category"
+                          hx-target="#draft-category-{{ draft.id }}"
+                          hx-swap="innerHTML">
+                        <select name="category" onchange="this.form.requestSubmit()" class="category-select">
+                            {% for cat in categories %}
+                            <option value="{{ cat }}"{% if draft.category.as_deref() == Some(cat) %} selected{% endif %}>{{ cat }}</option>
+                            {% endfor %}
+                        </select>
+                    </form>
+                </td>
+                <td>{{ draft.generated_at }}</td>
+                <td id="draft-actions-{{ draft.id }}">
+                    <button hx-post="/api/article/{{ draft.id }}/publish"
+                            hx-target="#draft-actions-{{ draft.id }}"
+                            class="btn btn-sm btn-success">
+                        Publish
+                    </button>
+                    <button hx-post="/api/article/{{ draft.id }}/reject"
+                            hx-target="#draft-actions-{{ draft.id }}"
+                            class="btn btn-sm btn-danger">
+                        Reject
+                    </button>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+</section>
+{% endblock %}

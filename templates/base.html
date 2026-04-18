@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}AI News{% endblock %}</title>
+    <script src="/static/htmx.min.js"></script>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <header>
+        <nav>
+            <a href="/" class="logo">AI News</a>
+            <div class="nav-links">
+                <a href="/">Home</a>
+                <a href="/admin">Admin</a>
+            </div>
+        </nav>
+    </header>
+    <main>
+        {% block content %}{% endblock %}
+    </main>
+    <footer>
+        <p>AI-generated news with full source attribution. Every sentence is sourced.</p>
+    </footer>
+</body>
+</html>
