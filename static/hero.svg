@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" preserveAspectRatio="xMidYMid meet" role="img" aria-label="AI News — synthesized news with full source attribution">
+  <rect width="1200" height="630" fill="#fafafa"/>
+
+  <!-- Faint column rules — newspaper texture -->
+  <g stroke="#e8e8e8" stroke-width="1">
+    <line x1="200" y1="120" x2="200" y2="510"/>
+    <line x1="400" y1="120" x2="400" y2="510"/>
+    <line x1="600" y1="120" x2="600" y2="510"/>
+    <line x1="800" y1="120" x2="800" y2="510"/>
+    <line x1="1000" y1="120" x2="1000" y2="510"/>
+  </g>
+
+  <!-- Top double rule (matches site masthead) -->
+  <line x1="60" y1="80" x2="1140" y2="80" stroke="#1a1a1a" stroke-width="2"/>
+  <line x1="60" y1="86" x2="1140" y2="86" stroke="#1a1a1a" stroke-width="1"/>
+
+  <!-- Eyebrow labels -->
+  <text x="60" y="65" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="13" font-weight="600" letter-spacing="3" fill="#1a1a1a">AI · NEWS · DAILY</text>
+  <text x="1140" y="65" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="13" letter-spacing="2" fill="#666" text-anchor="end">EVERY SENTENCE CITED</text>
+
+  <!-- Wordmark -->
+  <text x="600" y="335" font-family="Georgia, 'Times New Roman', serif" font-size="200" font-weight="700" letter-spacing="-0.04em" fill="#1a1a1a" text-anchor="middle">AI News</text>
+
+  <!-- Tagline -->
+  <text x="600" y="395" font-family="Georgia, 'Times New Roman', serif" font-style="italic" font-size="28" fill="#555" text-anchor="middle">Synthesized reporting with full source attribution</text>
+
+  <!-- Source-synthesis motif -->
+  <g transform="translate(600, 470)">
+    <line x1="-174" y1="0" x2="-10" y2="0" stroke="#0066cc" stroke-width="1.5"/>
+    <line x1="-114" y1="0" x2="-10" y2="0" stroke="#0066cc" stroke-width="1.5"/>
+    <line x1="-54" y1="0" x2="-10" y2="0" stroke="#0066cc" stroke-width="1.5"/>
+    <circle cx="-180" cy="0" r="6" fill="#0066cc"/>
+    <circle cx="-120" cy="0" r="6" fill="#0066cc"/>
+    <circle cx="-60" cy="0" r="6" fill="#0066cc"/>
+    <circle cx="0" cy="0" r="10" fill="#1a1a1a"/>
+    <line x1="10" y1="0" x2="62" y2="0" stroke="#1a1a1a" stroke-width="1.5"/>
+    <polygon points="62,-5 62,5 74,0" fill="#1a1a1a"/>
+    <rect x="84" y="-13" width="110" height="26" fill="none" stroke="#1a1a1a" stroke-width="1.5"/>
+    <line x1="92" y1="-5" x2="186" y2="-5" stroke="#666" stroke-width="1"/>
+    <line x1="92" y1="1" x2="186" y2="1" stroke="#666" stroke-width="1"/>
+    <line x1="92" y1="7" x2="150" y2="7" stroke="#666" stroke-width="1"/>
+  </g>
+
+  <!-- Bottom double rule -->
+  <line x1="60" y1="540" x2="1140" y2="540" stroke="#1a1a1a" stroke-width="1"/>
+  <line x1="60" y1="546" x2="1140" y2="546" stroke="#1a1a1a" stroke-width="2"/>
+
+  <!-- Bottom byline -->
+  <text x="60" y="595" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12" letter-spacing="2" fill="#666">CLUSTERED · SYNTHESIZED · CITED</text>
+  <text x="1140" y="595" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12" letter-spacing="2" fill="#666" text-anchor="end">UPDATED HOURLY</text>
+</svg>

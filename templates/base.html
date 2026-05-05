@@ -4,7 +4,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}AI News{% endblock %}</title>
-    {% block head %}{% endblock %}
+    {% block head %}
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="AI News">
+    <meta property="og:description" content="AI-generated news with full source attribution. Every sentence is sourced.">
+    <meta property="og:image" content="/static/hero.png">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="AI News">
+    <meta name="twitter:description" content="AI-generated news with full source attribution. Every sentence is sourced.">
+    <meta name="twitter:image" content="/static/hero.png">
+    {% endblock %}
     <script src="/static/htmx.min.js"></script>
     <link rel="stylesheet" href="/static/style.css">
 </head>

@@ -3,11 +3,18 @@
 {% block title %}{{ article.title }} - AI News{% endblock %}
 
 {% block head %}
-<meta name="twitter:card" content="summary">
+<meta property="og:type" content="article">
+<meta property="og:title" content="{{ article.title }}">
+{% if let Some(summary) = article.summary.as_ref() %}
+<meta property="og:description" content="{{ summary }}">
+{% endif %}
+<meta property="og:image" content="/static/hero.png">
+<meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="{{ article.title }}">
 {% if let Some(summary) = article.summary.as_ref() %}
 <meta name="twitter:description" content="{{ summary }}">
 {% endif %}
+<meta name="twitter:image" content="/static/hero.png">
 {% endblock %}
 
 {% block content %}
