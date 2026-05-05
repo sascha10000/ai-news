@@ -14,12 +14,15 @@ use crate::models::source_article::SourceArticle;
 use super::auth::RequireAuth;
 use super::super::AppState;
 
+const SERVER_LLM_ENABLED: bool = cfg!(feature = "server-llm");
+
 #[derive(Template, WebTemplate)]
 #[template(path = "admin/dashboard.html")]
 pub struct DashboardTemplate {
     pub feeds: Vec<FeedWithCount>,
     pub drafts: Vec<GeneratedArticle>,
     pub categories: &'static [&'static str],
+    pub server_llm_enabled: bool,
 }
 
 pub struct FeedWithCount {
@@ -47,6 +50,7 @@ pub async fn dashboard(
         feeds: feeds_with_count,
         drafts,
         categories: CATEGORIES,
+        server_llm_enabled: SERVER_LLM_ENABLED,
     })
 }
 

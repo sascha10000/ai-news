@@ -1,6 +1,5 @@
-use crate::error::AppError;
-use crate::models::generated_article::CATEGORIES;
-use crate::models::source_article::SourceArticle;
+use crate::GenerationError;
+use ai_news_core::{PendingSource, CATEGORIES};
 use ollama_rs::generation::completion::request::GenerationRequest;
 use ollama_rs::Ollama;
 use serde::Deserialize;
@@ -19,7 +18,7 @@ pub struct LlmSentence {
     pub sources: Vec<i64>,
 }
 
-pub fn build_prompt(articles: &[&SourceArticle]) -> String {
+pub fn build_prompt(articles: &[&PendingSource]) -> String {
     let mut prompt = String::from(
         r#"You are a professional news journalist. You will be given a set of source articles, each identified by a numeric ID. Your task is to write a NEW synthesized news article that covers the topic.
 
@@ -53,11 +52,11 @@ SOURCE ARTICLES:
     prompt
 }
 
-pub async fn check_model_available(ollama: &Ollama, model: &str) -> Result<(), AppError> {
+pub async fn check_model_available(ollama: &Ollama, model: &str) -> Result<(), GenerationError> {
     let models = ollama
         .list_local_models()
         .await
-        .map_err(|e| AppError::Llm(format!("Could not reach Ollama at startup: {e}")))?;
+        .map_err(|e| GenerationError::Llm(format!("Could not reach Ollama at startup: {e}")))?;
 
     let wanted_with_latest = if model.contains(':') {
         model.to_string()
@@ -74,7 +73,7 @@ pub async fn check_model_available(ollama: &Ollama, model: &str) -> Result<(), A
         Ok(())
     } else {
         let available: Vec<&str> = models.iter().map(|m| m.name.as_str()).collect();
-        Err(AppError::Llm(format!(
+        Err(GenerationError::Llm(format!(
             "Configured OLLAMA_MODEL '{model}' is not installed. Available models: [{}]. \
              Run `ollama pull {model}` to install it.",
             available.join(", ")
@@ -86,14 +85,14 @@ pub async fn call_ollama(
     ollama: &Ollama,
     model: &str,
     prompt: &str,
-) -> Result<String, AppError> {
+) -> Result<String, GenerationError> {
     let request = GenerationRequest::new(model.to_string(), prompt.to_string())
         .format(ollama_rs::generation::parameters::FormatType::Json);
 
     let response = ollama
         .generate(request)
         .await
-        .map_err(|e| AppError::Llm(format!("Ollama call failed: {e}")))?;
+        .map_err(|e| GenerationError::Llm(format!("Ollama call failed: {e}")))?;
 
     Ok(response.response)
 }
@@ -101,8 +100,7 @@ pub async fn call_ollama(
 pub fn parse_response(
     raw: &str,
     valid_source_ids: &HashSet<i64>,
-) -> Result<LlmArticleOutput, AppError> {
-    // Strip markdown fences if present
+) -> Result<LlmArticleOutput, GenerationError> {
     let cleaned = raw.trim();
     let cleaned = if cleaned.starts_with("```") {
         let inner = cleaned
@@ -114,35 +112,36 @@ pub fn parse_response(
         cleaned
     };
 
-    // Find the JSON object
     let start = cleaned.find('{').ok_or_else(|| {
-        AppError::Llm(format!("No JSON object found in LLM response: {}", &raw[..raw.len().min(200)]))
+        GenerationError::Llm(format!(
+            "No JSON object found in LLM response: {}",
+            &raw[..raw.len().min(200)]
+        ))
     })?;
-    let end = cleaned.rfind('}').ok_or_else(|| {
-        AppError::Llm("No closing brace found in LLM response".to_string())
-    })?;
+    let end = cleaned
+        .rfind('}')
+        .ok_or_else(|| GenerationError::Llm("No closing brace found in LLM response".to_string()))?;
     let json_str = &cleaned[start..=end];
 
     let mut output: LlmArticleOutput = serde_json::from_str(json_str)
-        .map_err(|e| AppError::Llm(format!("Failed to parse LLM JSON: {e}")))?;
+        .map_err(|e| GenerationError::Llm(format!("Failed to parse LLM JSON: {e}")))?;
 
-    // Validate category
     if let Some(ref cat) = output.category {
         if !CATEGORIES.iter().any(|c| c.eq_ignore_ascii_case(cat)) {
             output.category = Some("Other".to_string());
         }
     }
 
-    // Validate source IDs
     for sentence in &mut output.sentences {
         sentence.sources.retain(|id| valid_source_ids.contains(id));
     }
 
-    // Remove sentences with no valid sources
     output.sentences.retain(|s| !s.sources.is_empty());
 
     if output.sentences.is_empty() {
-        return Err(AppError::Llm("All sentences had invalid source IDs".to_string()));
+        return Err(GenerationError::Llm(
+            "All sentences had invalid source IDs".to_string(),
+        ));
     }
 
     Ok(output)

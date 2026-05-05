@@ -1,6 +1,7 @@
 use askama::Template;
 use askama_web::WebTemplate;
 use axum::extract::State;
+use axum::http::StatusCode;
 use axum::response::Redirect;
 use axum::Form;
 use axum_extra::extract::cookie::{Cookie, CookieJar};
@@ -93,4 +94,49 @@ impl axum::extract::FromRequestParts<AppState> for RequireAuth {
 
         Ok(RequireAuth)
     }
+}
+
+/// Extractor: validates `Authorization: Bearer <token>` against the configured API_TOKEN.
+/// Returns 503 if no token is configured (so an unconfigured server can't be probed silently).
+pub struct RequireApiToken;
+
+impl axum::extract::FromRequestParts<AppState> for RequireApiToken {
+    type Rejection = (StatusCode, &'static str);
+
+    async fn from_request_parts(
+        parts: &mut axum::http::request::Parts,
+        state: &AppState,
+    ) -> Result<Self, Self::Rejection> {
+        let configured = state.api_token.as_deref().ok_or((
+            StatusCode::SERVICE_UNAVAILABLE,
+            "Remote API not enabled (set API_TOKEN)",
+        ))?;
+
+        let header = parts
+            .headers
+            .get("Authorization")
+            .and_then(|v| v.to_str().ok())
+            .ok_or((StatusCode::UNAUTHORIZED, "Missing Authorization header"))?;
+
+        let token = header
+            .strip_prefix("Bearer ")
+            .ok_or((StatusCode::UNAUTHORIZED, "Expected `Bearer <token>`"))?;
+
+        if constant_time_eq(token.as_bytes(), configured.as_bytes()) {
+            Ok(RequireApiToken)
+        } else {
+            Err((StatusCode::UNAUTHORIZED, "Invalid token"))
+        }
+    }
+}
+
+fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    let mut diff: u8 = 0;
+    for (x, y) in a.iter().zip(b.iter()) {
+        diff |= x ^ y;
+    }
+    diff == 0
 }

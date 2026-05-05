@@ -1,21 +1,17 @@
-use crate::models::source_article::SourceArticle;
+use ai_news_core::PendingSource;
 use std::collections::{HashMap, HashSet};
 
-pub fn cluster_articles(articles: &[SourceArticle]) -> Vec<Vec<&SourceArticle>> {
+pub fn cluster_articles(articles: &[PendingSource]) -> Vec<Vec<&PendingSource>> {
     if articles.is_empty() {
         return vec![];
     }
 
-    let tokenized: Vec<HashSet<String>> = articles
-        .iter()
-        .map(|a| tokenize(&a.title))
-        .collect();
+    let tokenized: Vec<HashSet<String>> = articles.iter().map(|a| tokenize(&a.title)).collect();
 
     let threshold = 0.15;
     let mut used: HashSet<usize> = HashSet::new();
-    let mut clusters: Vec<Vec<&SourceArticle>> = Vec::new();
+    let mut clusters: Vec<Vec<&PendingSource>> = Vec::new();
 
-    // Build adjacency based on Jaccard similarity
     let mut adj: HashMap<usize, Vec<usize>> = HashMap::new();
     for i in 0..articles.len() {
         for j in (i + 1)..articles.len() {
@@ -27,7 +23,6 @@ pub fn cluster_articles(articles: &[SourceArticle]) -> Vec<Vec<&SourceArticle>> 
         }
     }
 
-    // Greedy clustering: pick node with most neighbors, form cluster
     let mut remaining: Vec<usize> = (0..articles.len()).collect();
     remaining.sort_by(|a, b| {
         let count_b = adj.get(b).map(|v| v.len()).unwrap_or(0);
@@ -62,10 +57,10 @@ pub fn cluster_articles(articles: &[SourceArticle]) -> Vec<Vec<&SourceArticle>> 
 
 fn tokenize(text: &str) -> HashSet<String> {
     let stopwords: HashSet<&str> = [
-        "the", "a", "an", "is", "are", "was", "were", "in", "on", "at", "to", "for",
-        "of", "and", "or", "but", "with", "by", "from", "as", "it", "its", "that",
-        "this", "has", "have", "had", "be", "been", "will", "would", "could", "should",
-        "not", "no", "do", "does", "did", "can", "may", "might", "shall",
+        "the", "a", "an", "is", "are", "was", "were", "in", "on", "at", "to", "for", "of", "and",
+        "or", "but", "with", "by", "from", "as", "it", "its", "that", "this", "has", "have", "had",
+        "be", "been", "will", "would", "could", "should", "not", "no", "do", "does", "did", "can",
+        "may", "might", "shall",
     ]
     .into_iter()
     .collect();

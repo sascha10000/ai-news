@@ -19,17 +19,23 @@
                 class="btn btn-primary">
             Fetch All Feeds
         </button>
+        {% if server_llm_enabled %}
         <button hx-post="/api/generate"
                 hx-target="#gen-result"
                 hx-indicator="#gen-spinner"
                 class="btn btn-primary">
             Generate Articles
         </button>
+        {% endif %}
     </div>
     <div id="fetch-result"></div>
     <span id="fetch-spinner" class="htmx-indicator">Fetching...</span>
+    {% if server_llm_enabled %}
     <div id="gen-result"></div>
     <span id="gen-spinner" class="htmx-indicator">Generating (this may take a while)...</span>
+    {% else %}
+    <p class="empty">Article generation runs from the local <code>client</code> CLI. See README.</p>
+    {% endif %}
 </section>
 
 <section class="admin-section">

@@ -6,22 +6,25 @@ mod handlers;
 mod models;
 mod scheduler;
 mod services;
+#[cfg(feature = "server-llm")]
+mod server_llm;
 
 use axum::Router;
 use axum::routing::{get, post};
-use ollama_rs::Ollama;
 use std::net::SocketAddr;
 use tower_http::services::ServeDir;
 
 #[derive(Clone)]
 pub struct AppState {
     pub db: sqlx::SqlitePool,
-    pub ollama: Ollama,
-    pub ollama_model: String,
     pub config_fetch_interval: u32,
-    pub config_gen_interval: u32,
     pub admin_username: String,
     pub admin_password: String,
+    pub api_token: Option<String>,
+    #[cfg(feature = "server-llm")]
+    pub ollama_cfg: ai_news_generation::OllamaConfig,
+    #[cfg(feature = "server-llm")]
+    pub config_gen_interval: u32,
 }
 
 #[tokio::main]
@@ -35,23 +38,32 @@ async fn main() {
         .await
         .expect("Failed to initialize database");
 
-    let ollama = Ollama::new(cfg.ollama_host.clone(), 11434);
+    if cfg.api_token.is_none() {
+        tracing::warn!(
+            "API_TOKEN is not set: /api/sources/pending and /api/articles/ingest will return 503"
+        );
+    }
 
-    if let Err(e) = services::llm::check_model_available(&ollama, &cfg.ollama_model).await {
+    #[cfg(feature = "server-llm")]
+    let ollama_cfg = server_llm::ollama_config_from(&cfg);
+
+    #[cfg(feature = "server-llm")]
+    if let Err(e) = ai_news_generation::check_model_available(&ollama_cfg).await {
         tracing::warn!("LLM startup check failed: {e}");
     }
 
     let state = AppState {
         db: pool,
-        ollama,
-        ollama_model: cfg.ollama_model.clone(),
         config_fetch_interval: cfg.fetch_interval_minutes,
+        admin_username: cfg.admin_username.clone(),
+        admin_password: cfg.admin_password.clone(),
+        api_token: cfg.api_token.clone(),
+        #[cfg(feature = "server-llm")]
+        ollama_cfg,
+        #[cfg(feature = "server-llm")]
         config_gen_interval: cfg.generate_interval_hours,
-        admin_username: cfg.admin_username,
-        admin_password: cfg.admin_password,
     };
 
-    // Start background scheduler
     let sched_state = state.clone();
     tokio::spawn(async move {
         if let Err(e) = scheduler::start_scheduler(sched_state).await {
@@ -72,16 +84,22 @@ async fn main() {
         .route("/admin/feeds", post(handlers::admin::create_feed))
         .route("/admin/feeds/import", post(handlers::admin::import_feeds))
         .route("/admin/feeds/{id}/delete", post(handlers::admin::delete_feed))
-        // API routes (protected)
+        // Session-protected API
         .route("/api/fetch-all", post(handlers::api::fetch_all_feeds))
         .route("/api/fetch/{feed_id}", post(handlers::api::fetch_feed))
-        .route("/api/generate", post(handlers::api::generate_articles))
         .route("/api/articles", get(handlers::api::article_list))
         .route("/api/articles/publish-all", post(handlers::api::publish_all_drafts))
         .route("/api/article/{id}/category", post(handlers::api::set_category))
         .route("/api/article/{id}/publish", post(handlers::api::publish_article))
         .route("/api/article/{id}/reject", post(handlers::api::reject_article))
-        // Static files
+        // Token-protected remote-control API
+        .route("/api/sources/pending", get(handlers::remote::pending_sources))
+        .route("/api/articles/ingest", post(handlers::remote::ingest_articles));
+
+    #[cfg(feature = "server-llm")]
+    let app = app.route("/api/generate", post(handlers::api::generate_articles));
+
+    let app = app
         .nest_service("/static", ServeDir::new("static"))
         .with_state(state);
 

@@ -7,7 +7,7 @@ use axum::Form;
 use crate::error::AppError;
 use crate::models::feed::Feed;
 use crate::models::generated_article::GeneratedArticle;
-use crate::services::{article_generator, feed_fetcher};
+use crate::services::feed_fetcher;
 
 use super::auth::RequireAuth;
 use super::super::AppState;
@@ -47,12 +47,12 @@ pub async fn fetch_feed(
     )))
 }
 
+#[cfg(feature = "server-llm")]
 pub async fn generate_articles(
     _auth: RequireAuth,
     State(state): State<AppState>,
 ) -> Result<Html<String>, AppError> {
-    let ids = article_generator::generate_articles(&state.db, &state.ollama, &state.ollama_model)
-        .await?;
+    let ids = crate::server_llm::run_local_generation(&state).await?;
 
     if ids.is_empty() {
         Ok(Html(

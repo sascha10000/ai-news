@@ -12,9 +12,46 @@ dependencies = [
 ]
 
 [[package]]
-name = "ai-news"
+name = "ai-news-client"
 version = "0.1.0"
 dependencies = [
+ "ai-news-core",
+ "ai-news-generation",
+ "anyhow",
+ "dotenvy",
+ "reqwest",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "ai-news-core"
+version = "0.1.0"
+dependencies = [
+ "serde",
+]
+
+[[package]]
+name = "ai-news-generation"
+version = "0.1.0"
+dependencies = [
+ "ai-news-core",
+ "ollama-rs",
+ "serde",
+ "serde_json",
+ "slug",
+ "thiserror",
+ "tracing",
+]
+
+[[package]]
+name = "ai-news-server"
+version = "0.1.0"
+dependencies = [
+ "ai-news-core",
+ "ai-news-generation",
  "askama",
  "askama_web",
  "axum",
@@ -23,13 +60,11 @@ dependencies = [
  "dotenvy",
  "feed-rs",
  "hex",
- "ollama-rs",
  "rand",
  "reqwest",
  "serde",
  "serde_json",
  "sha2",
- "slug",
  "sqlx",
  "thiserror",
  "time",
