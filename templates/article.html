@@ -2,6 +2,8 @@
 
 {% block title %}{{ article.title }} - AI News{% endblock %}
 
+{% block tagline %}{% endblock %}
+
 {% block head %}
 <meta property="og:type" content="article">
 <meta property="og:title" content="{{ article.title }}">
@@ -21,30 +23,32 @@
 <article class="article-detail">
     <h1>{{ article.title }}</h1>
     <div class="article-meta">
+        {% if let Some(cat) = article.category.as_ref() %}<span>{{ cat }}</span>{% endif %}
         <time>{{ article.formatted_published_at() }}</time>
+        <span>{{ all_sources.len() }} {% if all_sources.len() == 1 %}source{% else %}sources{% endif %}</span>
     </div>
 
     <div class="article-body">
         {% for sentence in sentences %}
-        <span class="sentence">{{ sentence.content }}{% for source in sentence.sources %}<sup><a href="{{ source.url }}" target="_blank" rel="noopener" title="{{ source.title }}">[{{ source.id }}]</a></sup>{% endfor %}</span>
+        <span class="sentence">{{ sentence.content }}{% for source in sentence.sources %}<sup><a href="#source-{{ source.id }}" title="{{ source.title }}">[{{ source.id }}]</a></sup>{% endfor %}</span>
         {% endfor %}
     </div>
 
-    <section class="sources">
+    <aside class="sources">
         <h2>Sources</h2>
         <ol>
             {% for source in all_sources %}
             <li id="source-{{ source.id }}">
-                <a href="{{ source.url }}" target="_blank" rel="noopener">{{ source.title }}</a>
                 <span class="source-id">[{{ source.id }}]</span>
+                <a href="{{ source.url }}" target="_blank" rel="noopener">{{ source.title }}</a>
                 {% if let Some(date) = source.formatted_date() %}
                 <time class="source-date">{{ date }}</time>
                 {% endif %}
             </li>
             {% endfor %}
         </ol>
-    </section>
+    </aside>
 </article>
 
-<a href="/" class="back-link">&larr; Back to all articles</a>
+<a href="/" class="back-link">&larr; Back</a>
 {% endblock %}

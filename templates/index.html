@@ -3,12 +3,6 @@
 {% block title %}AI News - Home{% endblock %}
 
 {% block content %}
-<section class="hero">
-    <img src="/static/hero.svg" alt="AI News — synthesized reporting with full source attribution">
-</section>
-
-<h1>Latest News</h1>
-
 {% if !categories.is_empty() %}
 <nav class="category-bar">
     <a href="/" class="category-pill{% if active_category.is_none() %} active{% endif %}">All</a>
@@ -22,23 +16,23 @@
 {% endif %}
 
 {% if articles.is_empty() %}
-<p class="empty">No published articles yet. Check back soon!</p>
+<p class="empty">No published articles yet. Check back soon.</p>
 {% else %}
 <div id="article-list" class="article-grid">
     {% for article in articles %}
     {% include "partials/article_card.html" %}
     {% endfor %}
-</div>
 
-{% if has_more %}
-<div class="load-more" id="load-more-btn">
-    <button hx-get="/api/articles?page={{ page + 1 }}{% if let Some(cat) = active_category %}&amp;category={{ cat }}{% endif %}"
-            hx-target="#article-list"
-            hx-swap="beforeend"
-            class="btn">
-        Load More
-    </button>
+    {% if has_more %}
+    <div class="load-more" id="load-more-btn">
+        <button hx-get="/api/articles?page={{ page + 1 }}{% if let Some(cat) = active_category %}&amp;category={{ cat }}{% endif %}"
+                hx-target="#article-list"
+                hx-swap="beforeend"
+                class="btn">
+            Load more
+        </button>
+    </div>
+    {% endif %}
 </div>
-{% endif %}
 {% endif %}
 {% endblock %}

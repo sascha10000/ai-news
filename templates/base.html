@@ -16,6 +16,8 @@
     {% endblock %}
     <script src="/static/htmx.min.js"></script>
     <link rel="stylesheet" href="/static/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 </head>
 <body>
     <header>
@@ -26,12 +28,13 @@
                 <a href="/admin">Admin</a>
             </div>
         </nav>
+        {% block tagline %}<p class="tagline">Synthesized news with full source attribution.</p>{% endblock %}
     </header>
     <main>
         {% block content %}{% endblock %}
     </main>
     <footer>
-        <p>AI-generated news with full source attribution. Every sentence is sourced.</p>
+        AI News &middot; Every sentence sourced
     </footer>
 </body>
 </html>
