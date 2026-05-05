@@ -20,7 +20,7 @@ impl Config {
             ollama_host: env::var("OLLAMA_HOST")
                 .unwrap_or_else(|_| "http://localhost:11434".to_string()),
             ollama_model: env::var("OLLAMA_MODEL")
-                .unwrap_or_else(|_| "llama3.1:8b".to_string()),
+                .unwrap_or_else(|_| "llama3.2:latest".to_string()),
             fetch_interval_minutes: env::var("FETCH_INTERVAL_MINUTES")
                 .ok()
                 .and_then(|v| v.parse().ok())
@@ -29,16 +29,13 @@ impl Config {
                 .ok()
                 .and_then(|v| v.parse().ok())
                 .unwrap_or(2),
-            server_host: env::var("SERVER_HOST")
-                .unwrap_or_else(|_| "127.0.0.1".to_string()),
+            server_host: env::var("SERVER_HOST").unwrap_or_else(|_| "127.0.0.1".to_string()),
             server_port: env::var("SERVER_PORT")
                 .ok()
                 .and_then(|v| v.parse().ok())
                 .unwrap_or(3000),
-            admin_username: env::var("ADMIN_USERNAME")
-                .unwrap_or_else(|_| "admin".to_string()),
-            admin_password: env::var("ADMIN_PASSWORD")
-                .expect("ADMIN_PASSWORD must be set in .env"),
+            admin_username: env::var("ADMIN_USERNAME").unwrap_or_else(|_| "admin".to_string()),
+            admin_password: env::var("ADMIN_PASSWORD").expect("ADMIN_PASSWORD must be set in .env"),
         }
     }
 }

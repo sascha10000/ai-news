@@ -53,6 +53,35 @@ SOURCE ARTICLES:
     prompt
 }
 
+pub async fn check_model_available(ollama: &Ollama, model: &str) -> Result<(), AppError> {
+    let models = ollama
+        .list_local_models()
+        .await
+        .map_err(|e| AppError::Llm(format!("Could not reach Ollama at startup: {e}")))?;
+
+    let wanted_with_latest = if model.contains(':') {
+        model.to_string()
+    } else {
+        format!("{model}:latest")
+    };
+
+    let found = models
+        .iter()
+        .any(|m| m.name == model || m.name == wanted_with_latest);
+
+    if found {
+        tracing::info!("Ollama model '{model}' is available");
+        Ok(())
+    } else {
+        let available: Vec<&str> = models.iter().map(|m| m.name.as_str()).collect();
+        Err(AppError::Llm(format!(
+            "Configured OLLAMA_MODEL '{model}' is not installed. Available models: [{}]. \
+             Run `ollama pull {model}` to install it.",
+            available.join(", ")
+        )))
+    }
+}
+
 pub async fn call_ollama(
     ollama: &Ollama,
     model: &str,

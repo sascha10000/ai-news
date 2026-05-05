@@ -4,6 +4,8 @@ use axum::extract::{Path, State};
 use axum::response::Redirect;
 use axum::Form;
 
+use serde::Deserialize;
+
 use crate::error::AppError;
 use crate::models::feed::{CreateFeed, Feed};
 use crate::models::generated_article::{GeneratedArticle, CATEGORIES};
@@ -54,6 +56,40 @@ pub async fn create_feed(
     Form(input): Form<CreateFeed>,
 ) -> Result<Redirect, AppError> {
     Feed::create(&state.db, &input.name, &input.url).await?;
+    Ok(Redirect::to("/admin"))
+}
+
+#[derive(Deserialize)]
+pub struct ImportFeeds {
+    pub csv: String,
+}
+
+pub async fn import_feeds(
+    _auth: RequireAuth,
+    State(state): State<AppState>,
+    Form(input): Form<ImportFeeds>,
+) -> Result<Redirect, AppError> {
+    for (idx, raw) in input.csv.lines().enumerate() {
+        let line = raw.trim();
+        if line.is_empty() {
+            continue;
+        }
+        let (name, url) = line.split_once(';').ok_or_else(|| {
+            AppError::FeedParse(format!(
+                "Line {}: expected 'name;url', got: {line}",
+                idx + 1
+            ))
+        })?;
+        let name = name.trim();
+        let url = url.trim();
+        if name.is_empty() || url.is_empty() {
+            return Err(AppError::FeedParse(format!(
+                "Line {}: name and url must be non-empty",
+                idx + 1
+            )));
+        }
+        Feed::create(&state.db, name, url).await?;
+    }
     Ok(Redirect::to("/admin"))
 }
 

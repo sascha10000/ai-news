@@ -311,6 +311,38 @@ h2 {
     min-width: 300px;
 }
 
+.import-feeds-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.import-feeds-form label {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 0.85rem;
+    color: #555;
+}
+
+.import-feeds-form code {
+    background: #f3f3f3;
+    padding: 0.05rem 0.3rem;
+    border-radius: 2px;
+    font-size: 0.85em;
+}
+
+.import-feeds-form textarea {
+    padding: 0.5rem 0.75rem;
+    border: 1px solid #ccc;
+    font-size: 0.85rem;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    resize: vertical;
+}
+
+.import-feeds-form button {
+    align-self: flex-start;
+}
+
 table {
     width: 100%;
     border-collapse: collapse;

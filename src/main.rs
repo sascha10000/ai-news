@@ -37,6 +37,10 @@ async fn main() {
 
     let ollama = Ollama::new(cfg.ollama_host.clone(), 11434);
 
+    if let Err(e) = services::llm::check_model_available(&ollama, &cfg.ollama_model).await {
+        tracing::warn!("LLM startup check failed: {e}");
+    }
+
     let state = AppState {
         db: pool,
         ollama,
@@ -66,6 +70,7 @@ async fn main() {
         // Admin routes (protected)
         .route("/admin", get(handlers::admin::dashboard))
         .route("/admin/feeds", post(handlers::admin::create_feed))
+        .route("/admin/feeds/import", post(handlers::admin::import_feeds))
         .route("/admin/feeds/{id}/delete", post(handlers::admin::delete_feed))
         // API routes (protected)
         .route("/api/fetch-all", post(handlers::api::fetch_all_feeds))

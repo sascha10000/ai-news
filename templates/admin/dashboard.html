@@ -40,6 +40,14 @@
         <button type="submit" class="btn">Add Feed</button>
     </form>
 
+    <form action="/admin/feeds/import" method="post" class="import-feeds-form">
+        <label for="csv">Bulk import (one feed per line, format: <code>name;url</code>)</label>
+        <textarea id="csv" name="csv" rows="5"
+                  placeholder="Hacker News;https://hnrss.org/frontpage&#10;The Verge;https://www.theverge.com/rss/index.xml"
+                  required></textarea>
+        <button type="submit" class="btn">Import CSV</button>
+    </form>
+
     <table class="feeds-table">
         <thead>
             <tr>
