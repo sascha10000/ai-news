@@ -23,8 +23,16 @@
         <button hx-post="/api/generate"
                 hx-target="#gen-result"
                 hx-indicator="#gen-spinner"
-                class="btn btn-primary">
-            Generate Articles
+                class="btn btn-primary"
+                title="Cluster across all feeds, ignoring lists">
+            Generate (unscoped)
+        </button>
+        <button hx-post="/api/generate/all-lists"
+                hx-target="#gen-result"
+                hx-indicator="#gen-spinner"
+                class="btn btn-primary"
+                title="Run a generation pass for every list">
+            Generate (all lists)
         </button>
         {% endif %}
     </div>
@@ -35,6 +43,51 @@
     <span id="gen-spinner" class="htmx-indicator">Generating (this may take a while)...</span>
     {% else %}
     <p class="empty">Article generation runs from the local <code>client</code> CLI. See README.</p>
+    {% endif %}
+</section>
+
+<section class="admin-section">
+    <h2>Lists</h2>
+    <p class="hint">Lists let you manually pre-cluster feeds. Generation can run per-list so the LLM only sees feeds you grouped together.</p>
+
+    <form action="/admin/lists" method="post" class="add-feed-form">
+        <input type="text" name="name" placeholder="List name (e.g. AI &amp; ML)" required>
+        <button type="submit" class="btn">Add List</button>
+    </form>
+
+    {% if lists.is_empty() %}
+    <p class="empty">No lists yet. Create one to start scoping generation.</p>
+    {% else %}
+    <table class="feeds-table">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Slug</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for list in lists %}
+            <tr>
+                <td>{{ list.name }}</td>
+                <td><code>{{ list.slug }}</code></td>
+                <td class="actions-cell">
+                    {% if server_llm_enabled %}
+                    <button hx-post="/api/generate/list/{{ list.id }}"
+                            hx-target="#gen-result"
+                            hx-indicator="#gen-spinner"
+                            class="btn btn-sm">
+                        Generate
+                    </button>
+                    {% endif %}
+                    <form action="/admin/lists/{{ list.id }}/delete" method="post" style="display:inline">
+                        <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
     {% endif %}
 </section>
 
@@ -60,6 +113,7 @@
                 <th>Name</th>
                 <th>URL</th>
                 <th>Articles</th>
+                <th>Lists</th>
                 <th>Last Fetched</th>
                 <th>Actions</th>
             </tr>
@@ -70,6 +124,26 @@
                 <td>{{ item.feed.name }}</td>
                 <td class="url-cell">{{ item.feed.url }}</td>
                 <td>{{ item.article_count }}</td>
+                <td class="lists-cell">
+                    {% for l in item.lists %}
+                    <span class="list-tag">
+                        {{ l.name }}
+                        <form action="/admin/feeds/{{ item.feed.id }}/lists/{{ l.id }}/delete" method="post" style="display:inline">
+                            <button type="submit" class="list-tag-remove" title="Remove from {{ l.name }}">&times;</button>
+                        </form>
+                    </span>
+                    {% endfor %}
+                    {% if !lists.is_empty() %}
+                    <form action="/admin/feeds/{{ item.feed.id }}/lists" method="post" class="list-assign-form">
+                        <select name="list_id" onchange="this.form.requestSubmit()">
+                            <option value="">+ add to list…</option>
+                            {% for l in lists %}
+                            <option value="{{ l.id }}">{{ l.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </form>
+                    {% endif %}
+                </td>
                 <td id="feed-status-{{ item.feed.id }}">
                     {{ item.feed.last_fetched_at.as_deref().unwrap_or("Never") }}
                 </td>

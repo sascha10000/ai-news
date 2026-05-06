@@ -20,7 +20,7 @@ pub struct LlmSentence {
 
 pub fn build_prompt(articles: &[&PendingSource]) -> String {
     let mut prompt = String::from(
-        r#"You are a professional news journalist. You will be given a set of source articles, each identified by a numeric ID. Your task is to write a NEW synthesized news article that covers the topic.
+        r#"You are a professional news journalist. You will be given a set of source articles, each identified by a numeric ID and a publication date. Your task is to write a NEW synthesized news article that covers the topic.
 
 STRICT RULES:
 1. Every sentence you write MUST be grounded in one or more source articles.
@@ -30,9 +30,10 @@ STRICT RULES:
 5. "category" MUST be exactly one of: Technology, Politics, Business, Science, Health, Sports, Entertainment, World, Environment, Other.
 6. Never fabricate information not present in the sources.
 7. Write 5-15 sentences. Be concise and journalistic.
-8. Do NOT include any text outside the JSON object.
+8. When sources span multiple dates, weight the most recent reporting for the lede, headline framing, and present-tense facts. Older sources are background context only — do not present stale information as current. If only old sources are available, write the piece as a retrospective rather than implying it is breaking news.
+9. Do NOT include any text outside the JSON object.
 
-SOURCE ARTICLES:
+SOURCE ARTICLES (sorted newest first):
 "#,
     );
 
@@ -42,9 +43,14 @@ SOURCE ARTICLES:
         } else {
             &article.content
         };
+        let date_str = article
+            .published_at
+            .as_deref()
+            .map(|s| if s.len() >= 10 { &s[..10] } else { s })
+            .unwrap_or("unknown");
         prompt.push_str(&format!(
-            "\n[ID: {}] Title: {}\n{}\n",
-            article.id, article.title, content
+            "\n[ID: {} | Published: {}] Title: {}\n{}\n",
+            article.id, date_str, article.title, content
         ));
     }
 

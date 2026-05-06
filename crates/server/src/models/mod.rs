@@ -1,4 +1,5 @@
 pub mod feed;
+pub mod list;
 pub mod source_article;
 pub mod generated_article;
 pub mod citation;

@@ -1,15 +1,42 @@
 use crate::error::AppError;
+use crate::models::list::List;
 use crate::models::source_article::SourceArticle;
 use crate::services::ingest;
 use crate::AppState;
 use ai_news_core::{IngestArticlesRequest, PendingSource};
-use ai_news_generation::{generate_drafts, OllamaConfig};
+use ai_news_generation::{generate_drafts_for_list, OllamaConfig};
 
-pub async fn run_local_generation(state: &AppState) -> Result<Vec<i64>, AppError> {
-    let articles = SourceArticle::recent_uncited(&state.db, 48).await?;
+pub async fn run_unscoped_generation(state: &AppState) -> Result<Vec<i64>, AppError> {
+    run_for_scope(state, None).await
+}
+
+pub async fn run_list_generation(state: &AppState, list_id: i64) -> Result<Vec<i64>, AppError> {
+    run_for_scope(state, Some(list_id)).await
+}
+
+pub async fn run_all_lists_generation(state: &AppState) -> Result<Vec<i64>, AppError> {
+    let lists = List::all(&state.db).await?;
+    let mut all_ids = Vec::new();
+    for list in &lists {
+        match run_for_scope(state, Some(list.id)).await {
+            Ok(mut ids) => all_ids.append(&mut ids),
+            Err(e) => tracing::error!("Generation for list '{}' failed: {e}", list.name),
+        }
+    }
+    Ok(all_ids)
+}
+
+async fn run_for_scope(state: &AppState, list_id: Option<i64>) -> Result<Vec<i64>, AppError> {
+    let articles = SourceArticle::recent_uncited(
+        &state.db,
+        48,
+        state.max_source_age_days as i64,
+        list_id,
+    )
+    .await?;
     let sources: Vec<PendingSource> = articles.into_iter().map(to_pending_source).collect();
 
-    let drafts = generate_drafts(sources, &state.ollama_cfg)
+    let drafts = generate_drafts_for_list(sources, &state.ollama_cfg, list_id)
         .await
         .map_err(|e| AppError::Llm(e.to_string()))?;
 

@@ -488,6 +488,39 @@ th { font-weight: 600; }
 .htmx-indicator { display: none; color: var(--muted); font-size: 0.85rem; }
 .htmx-request .htmx-indicator, .htmx-request.htmx-indicator { display: inline; }
 
+/* Admin: lists */
+.hint { color: var(--muted); font-size: 0.85rem; margin: -0.5rem 0 0.75rem; }
+.lists-cell { font-size: 0.85rem; }
+.list-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.1rem 0.45rem;
+    margin: 0 0.25rem 0.25rem 0;
+    background: rgba(255,255,255,0.4);
+    border: 1px solid var(--rule);
+    border-radius: 2px;
+    font-size: 0.8rem;
+}
+.list-tag-remove {
+    background: none;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    padding: 0;
+    font-size: 1rem;
+    line-height: 1;
+}
+.list-tag-remove:hover { color: var(--accent); }
+.list-assign-form { display: inline-block; margin: 0.25rem 0 0; }
+.list-assign-form select {
+    font-size: 0.78rem;
+    padding: 0.15rem 0.3rem;
+    background: transparent;
+    border: 1px dashed var(--rule);
+    color: var(--muted);
+}
+
 /* Login */
 .login-container {
     max-width: 400px;

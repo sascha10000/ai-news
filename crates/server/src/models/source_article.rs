@@ -47,16 +47,55 @@ impl SourceArticle {
         }
     }
 
-    pub async fn recent_uncited(pool: &SqlitePool, hours: i64) -> Result<Vec<SourceArticle>, sqlx::Error> {
-        sqlx::query_as::<_, SourceArticle>(
-            "SELECT sa.* FROM source_articles sa
+    pub async fn recent_uncited(
+        pool: &SqlitePool,
+        fetched_within_hours: i64,
+        max_published_age_days: i64,
+        list_id: Option<i64>,
+    ) -> Result<Vec<SourceArticle>, sqlx::Error> {
+        let base = "SELECT sa.* FROM source_articles sa
              WHERE sa.fetched_at > datetime('now', ? || ' hours')
-             AND sa.id NOT IN (SELECT source_article_id FROM sentence_citations)
-             ORDER BY sa.published_at DESC"
-        )
-        .bind(-hours)
-        .fetch_all(pool)
-        .await
+             AND (sa.published_at IS NULL
+                  OR datetime(sa.published_at) IS NULL
+                  OR datetime(sa.published_at) > datetime('now', ? || ' days'))";
+
+        match list_id {
+            Some(lid) => {
+                sqlx::query_as::<_, SourceArticle>(&format!(
+                    "{base}
+                     AND sa.feed_id IN (SELECT feed_id FROM feed_lists WHERE list_id = ?)
+                     AND sa.id NOT IN (
+                         SELECT sc.source_article_id FROM sentence_citations sc
+                         JOIN generated_sentences gs ON gs.id = sc.sentence_id
+                         JOIN generated_articles ga ON ga.id = gs.generated_article_id
+                         WHERE ga.list_id = ?
+                     )
+                     ORDER BY sa.published_at DESC"
+                ))
+                .bind(-fetched_within_hours)
+                .bind(-max_published_age_days)
+                .bind(lid)
+                .bind(lid)
+                .fetch_all(pool)
+                .await
+            }
+            None => {
+                sqlx::query_as::<_, SourceArticle>(&format!(
+                    "{base}
+                     AND sa.id NOT IN (
+                         SELECT sc.source_article_id FROM sentence_citations sc
+                         JOIN generated_sentences gs ON gs.id = sc.sentence_id
+                         JOIN generated_articles ga ON ga.id = gs.generated_article_id
+                         WHERE ga.list_id IS NULL
+                     )
+                     ORDER BY sa.published_at DESC"
+                ))
+                .bind(-fetched_within_hours)
+                .bind(-max_published_age_days)
+                .fetch_all(pool)
+                .await
+            }
+        }
     }
 
     pub async fn by_ids(pool: &SqlitePool, ids: &[i64]) -> Result<Vec<SourceArticle>, sqlx::Error> {

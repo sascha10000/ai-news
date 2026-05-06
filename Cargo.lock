@@ -38,6 +38,7 @@ name = "ai-news-generation"
 version = "0.1.0"
 dependencies = [
  "ai-news-core",
+ "chrono",
  "ollama-rs",
  "serde",
  "serde_json",
@@ -65,6 +66,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "slug",
  "sqlx",
  "thiserror",
  "time",

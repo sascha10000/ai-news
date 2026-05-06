@@ -27,6 +27,7 @@ pub async fn ingest_articles(
             &article.slug,
             summary.as_deref(),
             article.category.as_deref(),
+            article.list_id,
         )
         .await?;
 

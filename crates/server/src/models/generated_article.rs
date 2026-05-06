@@ -24,6 +24,7 @@ pub struct GeneratedArticle {
     pub status: String,
     pub generated_at: String,
     pub published_at: Option<String>,
+    pub list_id: Option<i64>,
 }
 
 impl GeneratedArticle {
@@ -104,14 +105,16 @@ impl GeneratedArticle {
         slug: &str,
         summary: Option<&str>,
         category: Option<&str>,
+        list_id: Option<i64>,
     ) -> Result<i64, sqlx::Error> {
         let result = sqlx::query(
-            "INSERT INTO generated_articles (title, slug, summary, category) VALUES (?, ?, ?, ?)"
+            "INSERT INTO generated_articles (title, slug, summary, category, list_id) VALUES (?, ?, ?, ?, ?)"
         )
         .bind(title)
         .bind(slug)
         .bind(summary)
         .bind(category)
+        .bind(list_id)
         .execute(pool)
         .await?;
         Ok(result.last_insert_rowid())

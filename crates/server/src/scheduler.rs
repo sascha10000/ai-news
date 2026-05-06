@@ -29,13 +29,17 @@ pub async fn start_scheduler(state: AppState) -> Result<(), Box<dyn std::error::
                 let s = gen_state.clone();
                 Box::pin(async move {
                     tracing::info!("Scheduled article generation starting...");
-                    match crate::server_llm::run_local_generation(&s).await {
-                        Ok(ids) => tracing::info!(
-                            "Scheduled generation complete: {} articles",
-                            ids.len()
-                        ),
-                        Err(e) => tracing::error!("Scheduled generation failed: {e}"),
+                    let unscoped = crate::server_llm::run_unscoped_generation(&s).await;
+                    let per_list = crate::server_llm::run_all_lists_generation(&s).await;
+                    let total = unscoped.as_ref().map(|v| v.len()).unwrap_or(0)
+                        + per_list.as_ref().map(|v| v.len()).unwrap_or(0);
+                    if let Err(e) = unscoped {
+                        tracing::error!("Scheduled unscoped generation failed: {e}");
                     }
+                    if let Err(e) = per_list {
+                        tracing::error!("Scheduled per-list generation failed: {e}");
+                    }
+                    tracing::info!("Scheduled generation complete: {total} articles");
                 })
             })?)
             .await?;

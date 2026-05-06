@@ -9,6 +9,7 @@ use serde::Deserialize;
 use crate::error::AppError;
 use crate::models::feed::{CreateFeed, Feed};
 use crate::models::generated_article::{GeneratedArticle, CATEGORIES};
+use crate::models::list::{CreateList, List};
 use crate::models::source_article::SourceArticle;
 
 use super::auth::RequireAuth;
@@ -19,15 +20,17 @@ const SERVER_LLM_ENABLED: bool = cfg!(feature = "server-llm");
 #[derive(Template, WebTemplate)]
 #[template(path = "admin/dashboard.html")]
 pub struct DashboardTemplate {
-    pub feeds: Vec<FeedWithCount>,
+    pub feeds: Vec<FeedWithLists>,
+    pub lists: Vec<List>,
     pub drafts: Vec<GeneratedArticle>,
     pub categories: &'static [&'static str],
     pub server_llm_enabled: bool,
 }
 
-pub struct FeedWithCount {
+pub struct FeedWithLists {
     pub feed: Feed,
     pub article_count: i64,
+    pub lists: Vec<List>,
 }
 
 pub async fn dashboard(
@@ -35,23 +38,74 @@ pub async fn dashboard(
     State(state): State<AppState>,
 ) -> Result<DashboardTemplate, AppError> {
     let feeds = Feed::all(&state.db).await?;
-    let mut feeds_with_count = Vec::new();
+    let lists = List::all(&state.db).await?;
+    let mut feeds_with_lists = Vec::new();
     for feed in feeds {
         let count = SourceArticle::count_for_feed(&state.db, feed.id).await?;
-        feeds_with_count.push(FeedWithCount {
+        let feed_lists = List::lists_for_feed(&state.db, feed.id).await?;
+        feeds_with_lists.push(FeedWithLists {
             feed,
             article_count: count,
+            lists: feed_lists,
         });
     }
 
     let drafts = GeneratedArticle::drafts(&state.db).await?;
 
     Ok(DashboardTemplate {
-        feeds: feeds_with_count,
+        feeds: feeds_with_lists,
+        lists,
         drafts,
         categories: CATEGORIES,
         server_llm_enabled: SERVER_LLM_ENABLED,
     })
+}
+
+pub async fn create_list(
+    _auth: RequireAuth,
+    State(state): State<AppState>,
+    Form(input): Form<CreateList>,
+) -> Result<Redirect, AppError> {
+    let name = input.name.trim();
+    if name.is_empty() {
+        return Err(AppError::FeedParse("List name cannot be empty".to_string()));
+    }
+    let slug = slug::slugify(name);
+    List::create(&state.db, name, &slug).await?;
+    Ok(Redirect::to("/admin"))
+}
+
+pub async fn delete_list(
+    _auth: RequireAuth,
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+) -> Result<Redirect, AppError> {
+    List::delete(&state.db, id).await?;
+    Ok(Redirect::to("/admin"))
+}
+
+#[derive(Deserialize)]
+pub struct AssignFeedToList {
+    pub list_id: i64,
+}
+
+pub async fn add_feed_to_list(
+    _auth: RequireAuth,
+    State(state): State<AppState>,
+    Path(feed_id): Path<i64>,
+    Form(input): Form<AssignFeedToList>,
+) -> Result<Redirect, AppError> {
+    List::add_feed(&state.db, input.list_id, feed_id).await?;
+    Ok(Redirect::to("/admin"))
+}
+
+pub async fn remove_feed_from_list(
+    _auth: RequireAuth,
+    State(state): State<AppState>,
+    Path((feed_id, list_id)): Path<(i64, i64)>,
+) -> Result<Redirect, AppError> {
+    List::remove_feed(&state.db, list_id, feed_id).await?;
+    Ok(Redirect::to("/admin"))
 }
 
 pub async fn create_feed(

@@ -21,6 +21,7 @@ pub struct AppState {
     pub admin_username: String,
     pub admin_password: String,
     pub api_token: Option<String>,
+    pub max_source_age_days: u32,
     #[cfg(feature = "server-llm")]
     pub ollama_cfg: ai_news_generation::OllamaConfig,
     #[cfg(feature = "server-llm")]
@@ -58,6 +59,7 @@ async fn main() {
         admin_username: cfg.admin_username.clone(),
         admin_password: cfg.admin_password.clone(),
         api_token: cfg.api_token.clone(),
+        max_source_age_days: cfg.max_source_age_days,
         #[cfg(feature = "server-llm")]
         ollama_cfg,
         #[cfg(feature = "server-llm")]
@@ -84,6 +86,13 @@ async fn main() {
         .route("/admin/feeds", post(handlers::admin::create_feed))
         .route("/admin/feeds/import", post(handlers::admin::import_feeds))
         .route("/admin/feeds/{id}/delete", post(handlers::admin::delete_feed))
+        .route("/admin/feeds/{feed_id}/lists", post(handlers::admin::add_feed_to_list))
+        .route(
+            "/admin/feeds/{feed_id}/lists/{list_id}/delete",
+            post(handlers::admin::remove_feed_from_list),
+        )
+        .route("/admin/lists", post(handlers::admin::create_list))
+        .route("/admin/lists/{id}/delete", post(handlers::admin::delete_list))
         // Session-protected API
         .route("/api/fetch-all", post(handlers::api::fetch_all_feeds))
         .route("/api/fetch/{feed_id}", post(handlers::api::fetch_feed))
@@ -94,10 +103,20 @@ async fn main() {
         .route("/api/article/{id}/reject", post(handlers::api::reject_article))
         // Token-protected remote-control API
         .route("/api/sources/pending", get(handlers::remote::pending_sources))
+        .route("/api/lists", get(handlers::remote::lists))
         .route("/api/articles/ingest", post(handlers::remote::ingest_articles));
 
     #[cfg(feature = "server-llm")]
-    let app = app.route("/api/generate", post(handlers::api::generate_articles));
+    let app = app
+        .route("/api/generate", post(handlers::api::generate_articles))
+        .route(
+            "/api/generate/list/{list_id}",
+            post(handlers::api::generate_articles_for_list),
+        )
+        .route(
+            "/api/generate/all-lists",
+            post(handlers::api::generate_articles_all_lists),
+        );
 
     let app = app
         .nest_service("/static", ServeDir::new("static"))

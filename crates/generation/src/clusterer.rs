@@ -1,5 +1,8 @@
 use ai_news_core::PendingSource;
+use chrono::{DateTime, FixedOffset};
 use std::collections::{HashMap, HashSet};
+
+const MAX_CLUSTER_DATE_GAP_DAYS: i64 = 14;
 
 pub fn cluster_articles(articles: &[PendingSource]) -> Vec<Vec<&PendingSource>> {
     if articles.is_empty() {
@@ -7,6 +10,8 @@ pub fn cluster_articles(articles: &[PendingSource]) -> Vec<Vec<&PendingSource>> 
     }
 
     let tokenized: Vec<HashSet<String>> = articles.iter().map(|a| tokenize(&a.title)).collect();
+    let dates: Vec<Option<DateTime<FixedOffset>>> =
+        articles.iter().map(|a| parse_date(&a.published_at)).collect();
 
     let threshold = 0.15;
     let mut used: HashSet<usize> = HashSet::new();
@@ -16,10 +21,16 @@ pub fn cluster_articles(articles: &[PendingSource]) -> Vec<Vec<&PendingSource>> 
     for i in 0..articles.len() {
         for j in (i + 1)..articles.len() {
             let sim = jaccard(&tokenized[i], &tokenized[j]);
-            if sim >= threshold {
-                adj.entry(i).or_default().push(j);
-                adj.entry(j).or_default().push(i);
+            if sim < threshold {
+                continue;
             }
+            if let (Some(di), Some(dj)) = (dates[i], dates[j]) {
+                if (di - dj).num_days().abs() > MAX_CLUSTER_DATE_GAP_DAYS {
+                    continue;
+                }
+            }
+            adj.entry(i).or_default().push(j);
+            adj.entry(j).or_default().push(i);
         }
     }
 
@@ -48,11 +59,27 @@ pub fn cluster_articles(articles: &[PendingSource]) -> Vec<Vec<&PendingSource>> 
         }
 
         if cluster.len() >= 2 {
-            clusters.push(cluster.iter().map(|&i| &articles[i]).collect());
+            let mut members: Vec<&PendingSource> =
+                cluster.iter().map(|&i| &articles[i]).collect();
+            members.sort_by(|a, b| {
+                let da = parse_date(&a.published_at);
+                let db = parse_date(&b.published_at);
+                match (da, db) {
+                    (Some(x), Some(y)) => y.cmp(&x),
+                    (Some(_), None) => std::cmp::Ordering::Less,
+                    (None, Some(_)) => std::cmp::Ordering::Greater,
+                    (None, None) => std::cmp::Ordering::Equal,
+                }
+            });
+            clusters.push(members);
         }
     }
 
     clusters
+}
+
+fn parse_date(s: &Option<String>) -> Option<DateTime<FixedOffset>> {
+    s.as_deref().and_then(|d| DateTime::parse_from_rfc3339(d).ok())
 }
 
 fn tokenize(text: &str) -> HashSet<String> {
