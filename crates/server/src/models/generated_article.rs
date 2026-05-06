@@ -128,13 +128,21 @@ impl GeneratedArticle {
                 .execute(pool)
                 .await?;
         } else {
-            sqlx::query("UPDATE generated_articles SET status = ? WHERE id = ?")
+            sqlx::query("UPDATE generated_articles SET status = ?, published_at = NULL WHERE id = ?")
                 .bind(status)
                 .bind(id)
                 .execute(pool)
                 .await?;
         }
         Ok(())
+    }
+
+    pub async fn all_published(pool: &SqlitePool) -> Result<Vec<GeneratedArticle>, sqlx::Error> {
+        sqlx::query_as::<_, GeneratedArticle>(
+            "SELECT * FROM generated_articles WHERE status = 'published' ORDER BY published_at DESC"
+        )
+        .fetch_all(pool)
+        .await
     }
 
     pub async fn set_category(pool: &SqlitePool, id: i64, category: &str) -> Result<(), sqlx::Error> {

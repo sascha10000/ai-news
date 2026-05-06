@@ -158,3 +158,12 @@ pub async fn reject_article(
     GeneratedArticle::set_status(&state.db, id, "rejected").await?;
     Ok(Html(r#"<span class="badge rejected">Rejected</span>"#.to_string()))
 }
+
+pub async fn unpublish_article(
+    _auth: RequireAuth,
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+) -> Result<Html<String>, AppError> {
+    GeneratedArticle::set_status(&state.db, id, "draft").await?;
+    Ok(Html(r#"<span class="badge">Unpublished</span>"#.to_string()))
+}

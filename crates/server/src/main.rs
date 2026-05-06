@@ -100,6 +100,7 @@ async fn main() {
         .route("/api/articles/publish-all", post(handlers::api::publish_all_drafts))
         .route("/api/article/{id}/category", post(handlers::api::set_category))
         .route("/api/article/{id}/publish", post(handlers::api::publish_article))
+        .route("/api/article/{id}/unpublish", post(handlers::api::unpublish_article))
         .route("/api/article/{id}/reject", post(handlers::api::reject_article))
         // Token-protected remote-control API
         .route("/api/sources/pending", get(handlers::remote::pending_sources))

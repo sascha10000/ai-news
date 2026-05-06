@@ -55,9 +55,9 @@ impl SourceArticle {
     ) -> Result<Vec<SourceArticle>, sqlx::Error> {
         let base = "SELECT sa.* FROM source_articles sa
              WHERE sa.fetched_at > datetime('now', ? || ' hours')
-             AND (sa.published_at IS NULL
-                  OR datetime(sa.published_at) IS NULL
-                  OR datetime(sa.published_at) > datetime('now', ? || ' days'))";
+             AND sa.published_at IS NOT NULL
+             AND datetime(sa.published_at) IS NOT NULL
+             AND datetime(sa.published_at) > datetime('now', ? || ' days')";
 
         match list_id {
             Some(lid) => {

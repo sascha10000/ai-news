@@ -222,4 +222,39 @@
     </table>
     {% endif %}
 </section>
+
+<section class="admin-section">
+    <h2>Published Articles</h2>
+    {% if published.is_empty() %}
+    <p class="empty">No published articles yet.</p>
+    {% else %}
+    <table class="drafts-table">
+        <thead>
+            <tr>
+                <th>Title</th>
+                <th>Category</th>
+                <th>Published</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for article in published %}
+            <tr>
+                <td><a href="/article/{{ article.slug }}">{{ article.title }}</a></td>
+                <td>{{ article.category.as_deref().unwrap_or("—") }}</td>
+                <td>{{ article.formatted_published_at() }}</td>
+                <td id="published-actions-{{ article.id }}">
+                    <button hx-post="/api/article/{{ article.id }}/unpublish"
+                            hx-target="#published-actions-{{ article.id }}"
+                            hx-confirm="Unpublish this article? It will return to drafts."
+                            class="btn btn-sm btn-danger">
+                        Unpublish
+                    </button>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+</section>
 {% endblock %}

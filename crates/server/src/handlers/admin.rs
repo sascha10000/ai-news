@@ -23,6 +23,7 @@ pub struct DashboardTemplate {
     pub feeds: Vec<FeedWithLists>,
     pub lists: Vec<List>,
     pub drafts: Vec<GeneratedArticle>,
+    pub published: Vec<GeneratedArticle>,
     pub categories: &'static [&'static str],
     pub server_llm_enabled: bool,
 }
@@ -51,11 +52,13 @@ pub async fn dashboard(
     }
 
     let drafts = GeneratedArticle::drafts(&state.db).await?;
+    let published = GeneratedArticle::all_published(&state.db).await?;
 
     Ok(DashboardTemplate {
         feeds: feeds_with_lists,
         lists,
         drafts,
+        published,
         categories: CATEGORIES,
         server_llm_enabled: SERVER_LLM_ENABLED,
     })
