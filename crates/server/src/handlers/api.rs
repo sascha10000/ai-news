@@ -122,10 +122,14 @@ pub async fn set_category(
     Path(id): Path<i64>,
     Form(input): Form<SetCategoryForm>,
 ) -> Result<Html<String>, AppError> {
-    GeneratedArticle::set_category(&state.db, id, &input.category).await?;
+    let normalized = input.category.split_whitespace().collect::<Vec<_>>().join(" ");
+    if normalized.is_empty() {
+        return Err(AppError::BadRequest("Category cannot be empty".to_string()));
+    }
+    GeneratedArticle::set_category(&state.db, id, &normalized).await?;
     Ok(Html(format!(
         r#"<span class="badge category">{}</span>"#,
-        input.category
+        normalized
     )))
 }
 

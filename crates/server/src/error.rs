@@ -9,6 +9,9 @@ pub enum AppError {
     #[error("Feed parse error: {0}")]
     FeedParse(String),
 
+    #[error("Bad request: {0}")]
+    BadRequest(String),
+
     #[error("LLM error: {0}")]
     Llm(String),
 
@@ -31,6 +34,7 @@ impl IntoResponse for AppError {
                 tracing::error!("Feed parse error: {msg}");
                 (StatusCode::BAD_REQUEST, format!("Feed error: {msg}"))
             }
+            AppError::BadRequest(msg) => (StatusCode::BAD_REQUEST, msg.clone()),
             AppError::Llm(msg) => {
                 tracing::error!("LLM error: {msg}");
                 (StatusCode::INTERNAL_SERVER_ERROR, format!("Generation error: {msg}"))

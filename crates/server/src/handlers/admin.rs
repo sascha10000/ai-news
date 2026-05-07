@@ -9,7 +9,7 @@ use serde::Deserialize;
 
 use crate::error::AppError;
 use crate::models::feed::{CreateFeed, Feed};
-use crate::models::generated_article::{GeneratedArticle, CATEGORIES};
+use crate::models::generated_article::GeneratedArticle;
 use crate::models::list::{CreateList, List};
 use crate::models::source_article::SourceArticle;
 
@@ -25,7 +25,7 @@ pub struct DashboardTemplate {
     pub lists: Vec<List>,
     pub drafts: Vec<GeneratedArticle>,
     pub published: Vec<GeneratedArticle>,
-    pub categories: &'static [&'static str],
+    pub categories: Vec<String>,
     pub server_llm_enabled: bool,
 }
 
@@ -54,13 +54,14 @@ pub async fn dashboard(
 
     let drafts = GeneratedArticle::drafts(&state.db).await?;
     let published = GeneratedArticle::all_published(&state.db).await?;
+    let categories = GeneratedArticle::all_categories(&state.db).await?;
 
     Ok(DashboardTemplate {
         feeds: feeds_with_lists,
         lists,
         drafts,
         published,
-        categories: CATEGORIES,
+        categories,
         server_llm_enabled: SERVER_LLM_ENABLED,
     })
 }
@@ -142,12 +143,14 @@ pub async fn create_feed(
 #[derive(Deserialize)]
 pub struct ImportFeeds {
     pub csv: String,
+    #[serde(default)]
+    pub list_ids: Vec<i64>,
 }
 
 pub async fn import_feeds(
     _auth: RequireAuth,
     State(state): State<AppState>,
-    Form(input): Form<ImportFeeds>,
+    ExtraForm(input): ExtraForm<ImportFeeds>,
 ) -> Result<Redirect, AppError> {
     for (idx, raw) in input.csv.lines().enumerate() {
         let line = raw.trim();
@@ -168,7 +171,10 @@ pub async fn import_feeds(
                 idx + 1
             )));
         }
-        Feed::create(&state.db, name, url).await?;
+        let feed_id = Feed::create(&state.db, name, url).await?;
+        for list_id in &input.list_ids {
+            List::add_feed(&state.db, *list_id, feed_id).await?;
+        }
     }
     Ok(Redirect::to("/admin"))
 }

@@ -1,18 +1,5 @@
 use serde::{Deserialize, Serialize};
 
-pub const CATEGORIES: &[&str] = &[
-    "Technology",
-    "Politics",
-    "Business",
-    "Science",
-    "Health",
-    "Sports",
-    "Entertainment",
-    "World",
-    "Environment",
-    "Other",
-];
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PendingSource {
     pub id: i64,

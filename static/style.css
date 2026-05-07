@@ -432,6 +432,26 @@ h2 { font-family: var(--font-display); font-weight: 500; }
 .import-feeds-form textarea { resize: vertical; min-height: 8rem; font-family: var(--font-mono); }
 .import-feeds-form button { align-self: flex-start; }
 
+.import-lists {
+    border: 1px solid var(--rule);
+    padding: 0.5rem 0.75rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem 0.75rem;
+}
+.import-lists legend {
+    padding: 0 0.4rem;
+    font-size: 0.8rem;
+    color: var(--muted);
+}
+.check-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.88rem;
+    cursor: pointer;
+}
+
 table {
     width: 100%;
     border-collapse: collapse;
@@ -483,11 +503,15 @@ th { font-weight: 600; }
 .badge.rejected  { background: #f1d1d3; color: #7a1418; }
 .badge.category  { background: rgba(0,0,0,0.04); color: var(--ink); border: 1px solid var(--rule); }
 
-.category-select {
+.category-select,
+.category-input {
     padding: 0.2rem 0.4rem;
     border: 1px solid var(--rule);
     background: var(--paper);
     font-size: 0.85rem;
+    font-family: var(--font-body);
+    color: var(--ink);
+    width: 12rem;
 }
 
 .success { color: #2d6a3e; font-size: 0.88rem; }

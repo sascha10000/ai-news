@@ -1,5 +1,5 @@
 use crate::GenerationError;
-use ai_news_core::{PendingSource, CATEGORIES};
+use ai_news_core::PendingSource;
 use ollama_rs::generation::completion::request::GenerationRequest;
 use ollama_rs::Ollama;
 use serde::Deserialize;
@@ -27,7 +27,7 @@ STRICT RULES:
 2. You MUST output valid JSON and nothing else.
 3. The JSON format is: {"title": "...", "category": "...", "sentences": [{"text": "...", "sources": [1, 3]}, ...]}
 4. Each object in "sentences" has "text" (one sentence) and "sources" (array of source IDs used).
-5. "category" MUST be exactly one of: Technology, Politics, Business, Science, Health, Sports, Entertainment, World, Environment, Other.
+5. "category" is a short Title Case label (1-2 words) describing the article's topic. Reuse a common label when one fits naturally (e.g. Technology, Politics, Business, Science, Health, Sports, Entertainment, World, Environment); otherwise pick a more specific label that reflects the topic. Avoid invented or quirky labels — prefer the same wording you'd see on a newspaper section.
 6. Never fabricate information not present in the sources.
 7. Write 5-15 sentences. Be concise and journalistic.
 8. When sources span multiple dates, weight the most recent reporting for the lede, headline framing, and present-tense facts. Older sources are background context only — do not present stale information as current. If only old sources are available, write the piece as a retrospective rather than implying it is breaking news.
@@ -132,11 +132,14 @@ pub fn parse_response(
     let mut output: LlmArticleOutput = serde_json::from_str(json_str)
         .map_err(|e| GenerationError::Llm(format!("Failed to parse LLM JSON: {e}")))?;
 
-    if let Some(ref cat) = output.category {
-        if !CATEGORIES.iter().any(|c| c.eq_ignore_ascii_case(cat)) {
-            output.category = Some("Other".to_string());
+    output.category = output.category.and_then(|c| {
+        let normalized = c.split_whitespace().collect::<Vec<_>>().join(" ");
+        if normalized.is_empty() {
+            None
+        } else {
+            Some(normalized)
         }
-    }
+    });
 
     for sentence in &mut output.sentences {
         sentence.sources.retain(|id| valid_source_ids.contains(id));

@@ -11,10 +11,18 @@ enum Mode {
     Unscoped,
     List(i64),
     AllLists,
+    ShowLists,
+    Help,
 }
 
 fn parse_mode() -> anyhow::Result<Mode> {
     let args: Vec<String> = env::args().collect();
+    if args.iter().any(|a| a == "--help" || a == "-h") {
+        return Ok(Mode::Help);
+    }
+    if args.iter().any(|a| a == "--show-lists") {
+        return Ok(Mode::ShowLists);
+    }
     if args.iter().any(|a| a == "--all-lists") {
         return Ok(Mode::AllLists);
     }
@@ -29,6 +37,33 @@ fn parse_mode() -> anyhow::Result<Mode> {
     Ok(Mode::Unscoped)
 }
 
+fn print_help() {
+    println!(
+        "ai-news-client — generate articles from pending source feeds via Ollama.
+
+USAGE:
+    client [MODE]
+
+MODES:
+    (no flags)          Generate articles from all pending sources, ignoring lists.
+    --list <ID>         Generate articles only for the given list ID.
+    --all-lists         Run a generation pass for every configured list.
+    --show-lists        Print all configured lists with their IDs (no generation).
+    --help, -h          Show this help.
+
+ENVIRONMENT:
+    SERVER_URL          Required. Base URL of the ai-news server (e.g. http://localhost:3000).
+    API_TOKEN           Required. Token for /api/* token-protected routes.
+    OLLAMA_HOST         Optional. Default: http://localhost:11434
+    OLLAMA_MODEL        Optional. Default: llama3.2:latest
+
+EXAMPLES:
+    client --show-lists
+    client --list 3
+    client --all-lists"
+    );
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
@@ -36,11 +71,27 @@ async fn main() -> anyhow::Result<()> {
 
     let mode = parse_mode()?;
 
+    if let Mode::Help = mode {
+        print_help();
+        return Ok(());
+    }
+
     let server_url = env::var("SERVER_URL")
         .map_err(|_| anyhow::anyhow!("SERVER_URL must be set (e.g. http://localhost:3000)"))?;
     let server_url = server_url.trim_end_matches('/').to_string();
     let api_token =
         env::var("API_TOKEN").map_err(|_| anyhow::anyhow!("API_TOKEN must be set"))?;
+
+    let http = reqwest::Client::builder()
+        .timeout(Duration::from_secs(120))
+        .build()?;
+
+    if let Mode::ShowLists = mode {
+        let lists = fetch_lists(&http, &server_url, &api_token).await?;
+        print_lists(&lists);
+        return Ok(());
+    }
+
     let ollama_cfg = OllamaConfig {
         host: env::var("OLLAMA_HOST").unwrap_or_else(|_| "http://localhost:11434".to_string()),
         model: env::var("OLLAMA_MODEL").unwrap_or_else(|_| "llama3.2:latest".to_string()),
@@ -48,11 +99,8 @@ async fn main() -> anyhow::Result<()> {
 
     check_model_available(&ollama_cfg).await?;
 
-    let http = reqwest::Client::builder()
-        .timeout(Duration::from_secs(120))
-        .build()?;
-
     match mode {
+        Mode::Help | Mode::ShowLists => unreachable!(),
         Mode::Unscoped => {
             let summary = run_one(&http, &server_url, &api_token, &ollama_cfg, None, "unscoped").await?;
             print_summary(&[summary]);
@@ -181,6 +229,19 @@ async fn fetch_lists(
         .json()
         .await?;
     Ok(body.lists)
+}
+
+fn print_lists(lists: &[ListSummary]) {
+    if lists.is_empty() {
+        println!("No lists configured. Create lists in the admin UI first.");
+        return;
+    }
+    let id_w = lists.iter().map(|l| l.id.to_string().len()).max().unwrap_or(2).max(2);
+    let name_w = lists.iter().map(|l| l.name.len()).max().unwrap_or(4).max(4);
+    println!("{:>w_id$}  {:<w_name$}  {}", "ID", "NAME", "SLUG", w_id = id_w, w_name = name_w);
+    for l in lists {
+        println!("{:>w_id$}  {:<w_name$}  {}", l.id, l.name, l.slug, w_id = id_w, w_name = name_w);
+    }
 }
 
 fn print_summary(runs: &[RunSummary]) {

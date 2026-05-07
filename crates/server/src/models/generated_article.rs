@@ -1,19 +1,6 @@
 use crate::filters;
 use sqlx::SqlitePool;
 
-pub const CATEGORIES: &[&str] = &[
-    "Technology",
-    "Politics",
-    "Business",
-    "Science",
-    "Health",
-    "Sports",
-    "Entertainment",
-    "World",
-    "Environment",
-    "Other",
-];
-
 #[derive(sqlx::FromRow, Clone)]
 pub struct GeneratedArticle {
     pub id: i64,
@@ -67,6 +54,17 @@ impl GeneratedArticle {
     pub async fn published_categories(pool: &SqlitePool) -> Result<Vec<String>, sqlx::Error> {
         let rows: Vec<(String,)> = sqlx::query_as(
             "SELECT DISTINCT category FROM generated_articles WHERE status = 'published' AND category IS NOT NULL ORDER BY category"
+        )
+        .fetch_all(pool)
+        .await?;
+        Ok(rows.into_iter().map(|r| r.0).collect())
+    }
+
+    pub async fn all_categories(pool: &SqlitePool) -> Result<Vec<String>, sqlx::Error> {
+        let rows: Vec<(String,)> = sqlx::query_as(
+            "SELECT DISTINCT category FROM generated_articles \
+             WHERE category IS NOT NULL AND TRIM(category) <> '' \
+             ORDER BY category"
         )
         .fetch_all(pool)
         .await?;

@@ -10,6 +10,12 @@
     </form>
 </div>
 
+<datalist id="known-categories">
+    {% for cat in categories %}
+    <option value="{{ cat }}"></option>
+    {% endfor %}
+</datalist>
+
 <section class="admin-section">
     <h2>Actions</h2>
     <div class="actions">
@@ -61,6 +67,7 @@
     <table class="feeds-table">
         <thead>
             <tr>
+                <th>ID</th>
                 <th>Name</th>
                 <th>Slug</th>
                 <th>Actions</th>
@@ -69,6 +76,7 @@
         <tbody>
             {% for list in lists %}
             <tr>
+                <td><code>{{ list.id }}</code></td>
                 <td>{{ list.name }}</td>
                 <td><code>{{ list.slug }}</code></td>
                 <td class="actions-cell">
@@ -104,6 +112,17 @@
         <textarea id="csv" name="csv" rows="5"
                   placeholder="Hacker News;https://hnrss.org/frontpage&#10;The Verge;https://www.theverge.com/rss/index.xml"
                   required></textarea>
+        {% if !lists.is_empty() %}
+        <fieldset class="import-lists">
+            <legend>Assign imported feeds to lists (optional)</legend>
+            {% for l in lists %}
+            <label class="check-pill">
+                <input type="checkbox" name="list_ids" value="{{ l.id }}">
+                {{ l.name }}
+            </label>
+            {% endfor %}
+        </fieldset>
+        {% endif %}
         <button type="submit" class="btn">Import CSV</button>
     </form>
 
@@ -215,11 +234,13 @@
                     <form hx-post="/api/article/{{ draft.id }}/category"
                           hx-target="#draft-category-{{ draft.id }}"
                           hx-swap="innerHTML">
-                        <select name="category" onchange="this.form.requestSubmit()" class="category-select">
-                            {% for cat in categories %}
-                            <option value="{{ cat }}"{% if draft.category.as_deref() == Some(cat) %} selected{% endif %}>{{ cat }}</option>
-                            {% endfor %}
-                        </select>
+                        <input type="text"
+                               name="category"
+                               list="known-categories"
+                               value="{% if let Some(c) = draft.category %}{{ c }}{% endif %}"
+                               placeholder="Pick or type new…"
+                               class="category-input"
+                               onchange="this.form.requestSubmit()">
                     </form>
                 </td>
                 <td>{{ draft.generated_at }}</td>
