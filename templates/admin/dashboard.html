@@ -107,9 +107,23 @@
         <button type="submit" class="btn">Import CSV</button>
     </form>
 
+    {% if !lists.is_empty() && !feeds.is_empty() %}
+    <form id="bulk-feed-form" action="/admin/feeds/lists/bulk" method="post" class="bulk-toolbar">
+        <select name="list_id" required>
+            <option value="">Choose list…</option>
+            {% for l in lists %}
+            <option value="{{ l.id }}">{{ l.name }}</option>
+            {% endfor %}
+        </select>
+        <button type="submit" class="btn btn-sm">Add selected to list</button>
+        <span class="hint">Tick rows in the first column to bulk-assign.</span>
+    </form>
+    {% endif %}
+
     <table class="feeds-table">
         <thead>
             <tr>
+                <th class="check-col"><input type="checkbox" form="bulk-feed-form" onclick="document.querySelectorAll('input.feed-check').forEach(c=>c.checked=this.checked)"></th>
                 <th>Name</th>
                 <th>URL</th>
                 <th>Articles</th>
@@ -121,6 +135,7 @@
         <tbody>
             {% for item in feeds %}
             <tr>
+                <td class="check-col"><input type="checkbox" class="feed-check" form="bulk-feed-form" name="feed_ids" value="{{ item.feed.id }}"></td>
                 <td>{{ item.feed.name }}</td>
                 <td class="url-cell">{{ item.feed.url }}</td>
                 <td>{{ item.article_count }}</td>
@@ -166,22 +181,25 @@
 <section class="admin-section">
     <div class="section-header">
         <h2>Draft Articles</h2>
-        {% if !drafts.is_empty() %}
-        <button hx-post="/api/articles/publish-all"
-                hx-target="#publish-all-result"
-                hx-confirm="Publish all draft articles?"
-                class="btn btn-sm btn-success">
-            Publish All
-        </button>
-        {% endif %}
     </div>
     <div id="publish-all-result"></div>
     {% if drafts.is_empty() %}
     <p class="empty">No drafts. Generate some articles first.</p>
     {% else %}
+    <div class="bulk-toolbar">
+        <button hx-post="/api/articles/bulk-publish"
+                hx-include="input.draft-check:checked"
+                hx-target="#publish-all-result"
+                hx-confirm="Publish selected drafts?"
+                class="btn btn-sm btn-success">
+            Publish selected
+        </button>
+        <span class="hint">Tick rows in the first column to bulk-publish.</span>
+    </div>
     <table class="drafts-table">
         <thead>
             <tr>
+                <th class="check-col"><input type="checkbox" onclick="document.querySelectorAll('input.draft-check').forEach(c=>c.checked=this.checked)"></th>
                 <th>Title</th>
                 <th>Category</th>
                 <th>Generated</th>
@@ -191,6 +209,7 @@
         <tbody>
             {% for draft in drafts %}
             <tr>
+                <td class="check-col"><input type="checkbox" class="draft-check" name="ids" value="{{ draft.id }}"></td>
                 <td><a href="/article/{{ draft.slug }}">{{ draft.title }}</a></td>
                 <td id="draft-category-{{ draft.id }}">
                     <form hx-post="/api/article/{{ draft.id }}/category"
@@ -224,13 +243,27 @@
 </section>
 
 <section class="admin-section">
-    <h2>Published Articles</h2>
+    <div class="section-header">
+        <h2>Published Articles</h2>
+    </div>
+    <div id="bulk-unpublish-result"></div>
     {% if published.is_empty() %}
     <p class="empty">No published articles yet.</p>
     {% else %}
+    <div class="bulk-toolbar">
+        <button hx-post="/api/articles/bulk-unpublish"
+                hx-include="input.published-check:checked"
+                hx-target="#bulk-unpublish-result"
+                hx-confirm="Unpublish selected articles? They will return to drafts."
+                class="btn btn-sm btn-danger">
+            Unpublish selected
+        </button>
+        <span class="hint">Tick rows in the first column to bulk-unpublish.</span>
+    </div>
     <table class="drafts-table">
         <thead>
             <tr>
+                <th class="check-col"><input type="checkbox" onclick="document.querySelectorAll('input.published-check').forEach(c=>c.checked=this.checked)"></th>
                 <th>Title</th>
                 <th>Category</th>
                 <th>Published</th>
@@ -240,6 +273,7 @@
         <tbody>
             {% for article in published %}
             <tr>
+                <td class="check-col"><input type="checkbox" class="published-check" name="ids" value="{{ article.id }}"></td>
                 <td><a href="/article/{{ article.slug }}">{{ article.title }}</a></td>
                 <td>{{ article.category.as_deref().unwrap_or("—") }}</td>
                 <td>{{ article.formatted_published_at() }}</td>

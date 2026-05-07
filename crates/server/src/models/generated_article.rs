@@ -137,6 +137,32 @@ impl GeneratedArticle {
         Ok(())
     }
 
+    pub async fn set_status_bulk(
+        pool: &SqlitePool,
+        ids: &[i64],
+        status: &str,
+    ) -> Result<u64, sqlx::Error> {
+        if ids.is_empty() {
+            return Ok(0);
+        }
+        let placeholders = std::iter::repeat("?").take(ids.len()).collect::<Vec<_>>().join(",");
+        let sql = if status == "published" {
+            format!(
+                "UPDATE generated_articles SET status = ?, published_at = datetime('now') WHERE id IN ({placeholders})"
+            )
+        } else {
+            format!(
+                "UPDATE generated_articles SET status = ?, published_at = NULL WHERE id IN ({placeholders})"
+            )
+        };
+        let mut q = sqlx::query(&sql).bind(status);
+        for id in ids {
+            q = q.bind(id);
+        }
+        let result = q.execute(pool).await?;
+        Ok(result.rows_affected())
+    }
+
     pub async fn all_published(pool: &SqlitePool) -> Result<Vec<GeneratedArticle>, sqlx::Error> {
         sqlx::query_as::<_, GeneratedArticle>(
             "SELECT * FROM generated_articles WHERE status = 'published' ORDER BY published_at DESC"

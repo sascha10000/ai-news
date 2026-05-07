@@ -1,8 +1,10 @@
 use askama::Template;
 use askama_web::WebTemplate;
 use axum::extract::{Path, Query, State};
+use axum::http::{HeaderMap, HeaderValue};
 use axum::response::Html;
 use axum::Form;
+use axum_extra::extract::Form as ExtraForm;
 
 use crate::error::AppError;
 use crate::models::feed::Feed;
@@ -127,20 +129,6 @@ pub async fn set_category(
     )))
 }
 
-pub async fn publish_all_drafts(
-    _auth: RequireAuth,
-    State(state): State<AppState>,
-) -> Result<Html<String>, AppError> {
-    let drafts = GeneratedArticle::drafts(&state.db).await?;
-    let count = drafts.len();
-    for draft in &drafts {
-        GeneratedArticle::set_status(&state.db, draft.id, "published").await?;
-    }
-    Ok(Html(format!(
-        r#"<div class="success">Published {count} article(s). <a href="/admin">Refresh</a> to update the list.</div>"#
-    )))
-}
-
 pub async fn publish_article(
     _auth: RequireAuth,
     State(state): State<AppState>,
@@ -166,4 +154,34 @@ pub async fn unpublish_article(
 ) -> Result<Html<String>, AppError> {
     GeneratedArticle::set_status(&state.db, id, "draft").await?;
     Ok(Html(r#"<span class="badge">Unpublished</span>"#.to_string()))
+}
+
+#[derive(serde::Deserialize)]
+pub struct BulkArticleIds {
+    #[serde(default)]
+    pub ids: Vec<i64>,
+}
+
+pub async fn bulk_publish(
+    _auth: RequireAuth,
+    State(state): State<AppState>,
+    ExtraForm(input): ExtraForm<BulkArticleIds>,
+) -> Result<(HeaderMap, Html<String>), AppError> {
+    let n = GeneratedArticle::set_status_bulk(&state.db, &input.ids, "published").await?;
+    Ok(refresh_response(format!("Published {n} article(s).")))
+}
+
+pub async fn bulk_unpublish(
+    _auth: RequireAuth,
+    State(state): State<AppState>,
+    ExtraForm(input): ExtraForm<BulkArticleIds>,
+) -> Result<(HeaderMap, Html<String>), AppError> {
+    let n = GeneratedArticle::set_status_bulk(&state.db, &input.ids, "draft").await?;
+    Ok(refresh_response(format!("Unpublished {n} article(s).")))
+}
+
+fn refresh_response(msg: String) -> (HeaderMap, Html<String>) {
+    let mut headers = HeaderMap::new();
+    headers.insert("HX-Refresh", HeaderValue::from_static("true"));
+    (headers, Html(format!(r#"<div class="success">{msg}</div>"#)))
 }

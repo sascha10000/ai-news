@@ -3,6 +3,7 @@ use askama_web::WebTemplate;
 use axum::extract::{Path, State};
 use axum::response::Redirect;
 use axum::Form;
+use axum_extra::extract::Form as ExtraForm;
 
 use serde::Deserialize;
 
@@ -99,6 +100,24 @@ pub async fn add_feed_to_list(
     Form(input): Form<AssignFeedToList>,
 ) -> Result<Redirect, AppError> {
     List::add_feed(&state.db, input.list_id, feed_id).await?;
+    Ok(Redirect::to("/admin"))
+}
+
+#[derive(Deserialize)]
+pub struct BulkAssignFeedsToList {
+    pub list_id: i64,
+    #[serde(default, rename = "feed_ids")]
+    pub feed_ids: Vec<i64>,
+}
+
+pub async fn bulk_add_feeds_to_list(
+    _auth: RequireAuth,
+    State(state): State<AppState>,
+    ExtraForm(input): ExtraForm<BulkAssignFeedsToList>,
+) -> Result<Redirect, AppError> {
+    for feed_id in &input.feed_ids {
+        List::add_feed(&state.db, input.list_id, *feed_id).await?;
+    }
     Ok(Redirect::to("/admin"))
 }
 

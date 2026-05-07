@@ -86,6 +86,7 @@ async fn main() {
         .route("/admin/feeds", post(handlers::admin::create_feed))
         .route("/admin/feeds/import", post(handlers::admin::import_feeds))
         .route("/admin/feeds/{id}/delete", post(handlers::admin::delete_feed))
+        .route("/admin/feeds/lists/bulk", post(handlers::admin::bulk_add_feeds_to_list))
         .route("/admin/feeds/{feed_id}/lists", post(handlers::admin::add_feed_to_list))
         .route(
             "/admin/feeds/{feed_id}/lists/{list_id}/delete",
@@ -97,7 +98,8 @@ async fn main() {
         .route("/api/fetch-all", post(handlers::api::fetch_all_feeds))
         .route("/api/fetch/{feed_id}", post(handlers::api::fetch_feed))
         .route("/api/articles", get(handlers::api::article_list))
-        .route("/api/articles/publish-all", post(handlers::api::publish_all_drafts))
+        .route("/api/articles/bulk-publish", post(handlers::api::bulk_publish))
+        .route("/api/articles/bulk-unpublish", post(handlers::api::bulk_unpublish))
         .route("/api/article/{id}/category", post(handlers::api::set_category))
         .route("/api/article/{id}/publish", post(handlers::api::publish_article))
         .route("/api/article/{id}/unpublish", post(handlers::api::unpublish_article))
