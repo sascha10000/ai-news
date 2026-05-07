@@ -1,6 +1,9 @@
+use std::collections::HashMap;
+
 use crate::error::AppError;
 use crate::models::citation::{GeneratedSentence, SentenceCitation};
 use crate::models::generated_article::GeneratedArticle;
+use crate::models::list::List;
 use ai_news_core::IngestArticlesRequest;
 use sqlx::SqlitePool;
 
@@ -9,6 +12,7 @@ pub async fn ingest_articles(
     req: IngestArticlesRequest,
 ) -> Result<Vec<i64>, AppError> {
     let mut created = Vec::new();
+    let mut owner_cache: HashMap<i64, Option<i64>> = HashMap::new();
 
     for article in req.articles {
         if article.sentences.is_empty() {
@@ -21,6 +25,18 @@ pub async fn ingest_articles(
             .clone()
             .or_else(|| article.sentences.first().map(|s| s.content.clone()));
 
+        let user_id = match article.list_id {
+            Some(lid) => match owner_cache.get(&lid) {
+                Some(cached) => *cached,
+                None => {
+                    let owner = List::owner_of(pool, lid).await?;
+                    owner_cache.insert(lid, owner);
+                    owner
+                }
+            },
+            None => None,
+        };
+
         let id = GeneratedArticle::insert(
             pool,
             &article.title,
@@ -28,6 +44,7 @@ pub async fn ingest_articles(
             summary.as_deref(),
             article.category.as_deref(),
             article.list_id,
+            user_id,
         )
         .await?;
 

@@ -11,7 +11,7 @@ use crate::models::feed::Feed;
 use crate::models::generated_article::GeneratedArticle;
 use crate::services::feed_fetcher;
 
-use super::auth::RequireAuth;
+use super::auth::RequireAdmin;
 use super::super::AppState;
 use super::public::Pagination;
 
@@ -25,7 +25,7 @@ pub struct ArticleListPartial {
 }
 
 pub async fn fetch_all_feeds(
-    _auth: RequireAuth,
+    _auth: RequireAdmin,
     State(state): State<AppState>,
 ) -> Result<Html<String>, AppError> {
     let count = feed_fetcher::fetch_all_feeds(&state.db).await?;
@@ -35,14 +35,16 @@ pub async fn fetch_all_feeds(
 }
 
 pub async fn fetch_feed(
-    _auth: RequireAuth,
+    _auth: RequireAdmin,
     State(state): State<AppState>,
     Path(feed_id): Path<i64>,
 ) -> Result<Html<String>, AppError> {
     let feed = Feed::by_id(&state.db, feed_id)
         .await?
         .ok_or(AppError::NotFound)?;
-
+    if feed.user_id.is_some() {
+        return Err(AppError::NotFound);
+    }
     let count = feed_fetcher::fetch_feed(&state.db, &feed).await?;
     Ok(Html(format!(
         r#"<span class="success">{count} new</span>"#
@@ -51,7 +53,7 @@ pub async fn fetch_feed(
 
 #[cfg(feature = "server-llm")]
 pub async fn generate_articles(
-    _auth: RequireAuth,
+    _auth: RequireAdmin,
     State(state): State<AppState>,
 ) -> Result<Html<String>, AppError> {
     let ids = crate::server_llm::run_unscoped_generation(&state).await?;
@@ -60,7 +62,7 @@ pub async fn generate_articles(
 
 #[cfg(feature = "server-llm")]
 pub async fn generate_articles_for_list(
-    _auth: RequireAuth,
+    _auth: RequireAdmin,
     State(state): State<AppState>,
     Path(list_id): Path<i64>,
 ) -> Result<Html<String>, AppError> {
@@ -70,7 +72,7 @@ pub async fn generate_articles_for_list(
 
 #[cfg(feature = "server-llm")]
 pub async fn generate_articles_all_lists(
-    _auth: RequireAuth,
+    _auth: RequireAdmin,
     State(state): State<AppState>,
 ) -> Result<Html<String>, AppError> {
     let ids = crate::server_llm::run_all_lists_generation(&state).await?;
@@ -99,7 +101,8 @@ pub async fn article_list(
     let offset = (page - 1) * per_page;
     let category = params.category.as_deref().filter(|c| !c.is_empty());
 
-    let articles = GeneratedArticle::published(&state.db, per_page + 1, offset, category).await?;
+    let articles =
+        GeneratedArticle::published_global(&state.db, per_page + 1, offset, category).await?;
     let has_more = articles.len() as i64 > per_page;
     let articles: Vec<_> = articles.into_iter().take(per_page as usize).collect();
 
@@ -117,7 +120,7 @@ pub struct SetCategoryForm {
 }
 
 pub async fn set_category(
-    _auth: RequireAuth,
+    _auth: RequireAdmin,
     State(state): State<AppState>,
     Path(id): Path<i64>,
     Form(input): Form<SetCategoryForm>,
@@ -126,7 +129,10 @@ pub async fn set_category(
     if normalized.is_empty() {
         return Err(AppError::BadRequest("Category cannot be empty".to_string()));
     }
-    GeneratedArticle::set_category(&state.db, id, &normalized).await?;
+    let updated = GeneratedArticle::set_category_for_admin(&state.db, id, &normalized).await?;
+    if !updated {
+        return Err(AppError::NotFound);
+    }
     Ok(Html(format!(
         r#"<span class="badge category">{}</span>"#,
         normalized
@@ -134,29 +140,38 @@ pub async fn set_category(
 }
 
 pub async fn publish_article(
-    _auth: RequireAuth,
+    _auth: RequireAdmin,
     State(state): State<AppState>,
     Path(id): Path<i64>,
 ) -> Result<Html<String>, AppError> {
-    GeneratedArticle::set_status(&state.db, id, "published").await?;
+    let updated = GeneratedArticle::set_status_for_admin(&state.db, id, "published").await?;
+    if !updated {
+        return Err(AppError::NotFound);
+    }
     Ok(Html(r#"<span class="badge published">Published</span>"#.to_string()))
 }
 
 pub async fn reject_article(
-    _auth: RequireAuth,
+    _auth: RequireAdmin,
     State(state): State<AppState>,
     Path(id): Path<i64>,
 ) -> Result<Html<String>, AppError> {
-    GeneratedArticle::set_status(&state.db, id, "rejected").await?;
+    let updated = GeneratedArticle::set_status_for_admin(&state.db, id, "rejected").await?;
+    if !updated {
+        return Err(AppError::NotFound);
+    }
     Ok(Html(r#"<span class="badge rejected">Rejected</span>"#.to_string()))
 }
 
 pub async fn unpublish_article(
-    _auth: RequireAuth,
+    _auth: RequireAdmin,
     State(state): State<AppState>,
     Path(id): Path<i64>,
 ) -> Result<Html<String>, AppError> {
-    GeneratedArticle::set_status(&state.db, id, "draft").await?;
+    let updated = GeneratedArticle::set_status_for_admin(&state.db, id, "draft").await?;
+    if !updated {
+        return Err(AppError::NotFound);
+    }
     Ok(Html(r#"<span class="badge">Unpublished</span>"#.to_string()))
 }
 
@@ -167,20 +182,20 @@ pub struct BulkArticleIds {
 }
 
 pub async fn bulk_publish(
-    _auth: RequireAuth,
+    _auth: RequireAdmin,
     State(state): State<AppState>,
     ExtraForm(input): ExtraForm<BulkArticleIds>,
 ) -> Result<(HeaderMap, Html<String>), AppError> {
-    let n = GeneratedArticle::set_status_bulk(&state.db, &input.ids, "published").await?;
+    let n = GeneratedArticle::set_status_bulk_for_admin(&state.db, &input.ids, "published").await?;
     Ok(refresh_response(format!("Published {n} article(s).")))
 }
 
 pub async fn bulk_unpublish(
-    _auth: RequireAuth,
+    _auth: RequireAdmin,
     State(state): State<AppState>,
     ExtraForm(input): ExtraForm<BulkArticleIds>,
 ) -> Result<(HeaderMap, Html<String>), AppError> {
-    let n = GeneratedArticle::set_status_bulk(&state.db, &input.ids, "draft").await?;
+    let n = GeneratedArticle::set_status_bulk_for_admin(&state.db, &input.ids, "draft").await?;
     Ok(refresh_response(format!("Unpublished {n} article(s).")))
 }
 

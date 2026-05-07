@@ -1,0 +1,478 @@
+use askama::Template;
+use askama_web::WebTemplate;
+use axum::extract::{Path, State};
+use axum::http::{HeaderMap, HeaderValue};
+use axum::response::{Html, IntoResponse, Redirect, Response};
+use axum::Form;
+use axum_extra::extract::cookie::{Cookie, CookieJar};
+use axum_extra::extract::Form as ExtraForm;
+use serde::Deserialize;
+use time::Duration;
+
+use crate::error::AppError;
+use crate::handlers::admin::{FeedWithLists, ImportErrorsTemplate};
+use crate::models::feed::{CreateFeed, Feed};
+use crate::models::generated_article::GeneratedArticle;
+use crate::models::list::{CreateList, List};
+use crate::models::session::{Identity, Session};
+use crate::models::source_article::SourceArticle;
+use crate::models::user::{User, UserError};
+use crate::services::{feed_fetcher, feed_import};
+
+use super::auth::RequireUser;
+use super::super::AppState;
+
+#[derive(Template, WebTemplate)]
+#[template(path = "register.html")]
+pub struct RegisterTemplate {
+    pub error: Option<String>,
+    pub username: Option<String>,
+}
+
+#[derive(Template, WebTemplate)]
+#[template(path = "user/dashboard.html")]
+pub struct UserDashboardTemplate {
+    pub user: User,
+    pub feeds: Vec<FeedWithLists>,
+    pub lists: Vec<List>,
+    pub drafts: Vec<GeneratedArticle>,
+    pub published: Vec<GeneratedArticle>,
+    pub categories: Vec<String>,
+    pub server_llm_enabled: bool,
+}
+
+#[derive(Deserialize)]
+pub struct RegisterForm {
+    pub username: String,
+    pub password: String,
+    pub password_confirm: String,
+}
+
+pub async fn register_page(
+    jar: CookieJar,
+    State(state): State<AppState>,
+) -> Result<Redirect, RegisterTemplate> {
+    if let Some(cookie) = jar.get("session") {
+        if let Ok(Some(identity)) = Session::validate(&state.db, cookie.value()).await {
+            let target = match identity {
+                Identity::Admin => "/admin",
+                Identity::User(_) => "/user",
+            };
+            return Ok(Redirect::to(target));
+        }
+    }
+    Err(RegisterTemplate { error: None, username: None })
+}
+
+pub async fn register(
+    State(state): State<AppState>,
+    jar: CookieJar,
+    Form(input): Form<RegisterForm>,
+) -> Result<(CookieJar, Redirect), RegisterTemplate> {
+    let username = input.username.trim().to_lowercase();
+
+    if input.password != input.password_confirm {
+        return Err(RegisterTemplate {
+            error: Some("Passwords do not match".to_string()),
+            username: Some(username),
+        });
+    }
+
+    let id = match User::create(&state.db, &username, &input.password).await {
+        Ok(id) => id,
+        Err(UserError::UsernameTaken) => {
+            return Err(RegisterTemplate {
+                error: Some("That username is taken".to_string()),
+                username: Some(username),
+            });
+        }
+        Err(UserError::ReservedUsername(_)) => {
+            return Err(RegisterTemplate {
+                error: Some("That username is reserved".to_string()),
+                username: None,
+            });
+        }
+        Err(UserError::InvalidUsername) => {
+            return Err(RegisterTemplate {
+                error: Some(
+                    "Username must be 3-32 chars, lowercase a-z, 0-9, dash, underscore"
+                        .to_string(),
+                ),
+                username: None,
+            });
+        }
+        Err(UserError::WeakPassword) => {
+            return Err(RegisterTemplate {
+                error: Some("Password must be at least 8 characters".to_string()),
+                username: Some(username),
+            });
+        }
+        Err(UserError::Db(e)) => {
+            tracing::error!("User::create db error: {e}");
+            return Err(RegisterTemplate {
+                error: Some("Server error, please try again".to_string()),
+                username: Some(username),
+            });
+        }
+    };
+
+    let token = Session::create(&state.db, Identity::User(id))
+        .await
+        .map_err(|_| RegisterTemplate {
+            error: Some("Account created but session failed; please log in".to_string()),
+            username: None,
+        })?;
+
+    let cookie = Cookie::build(("session", token))
+        .path("/")
+        .http_only(true)
+        .max_age(Duration::hours(24))
+        .same_site(axum_extra::extract::cookie::SameSite::Lax)
+        .build();
+
+    Ok((jar.add(cookie), Redirect::to("/user")))
+}
+
+pub async fn dashboard(
+    RequireUser(uid): RequireUser,
+    State(state): State<AppState>,
+) -> Result<UserDashboardTemplate, AppError> {
+    let user = User::by_id(&state.db, uid).await?.ok_or(AppError::NotFound)?;
+    let feeds = Feed::all_for_user(&state.db, uid).await?;
+    let lists = List::all_for_user(&state.db, uid).await?;
+
+    let mut feeds_with_lists = Vec::new();
+    for feed in feeds {
+        let count = SourceArticle::count_for_feed(&state.db, feed.id).await?;
+        let feed_lists = List::lists_for_feed(&state.db, feed.id).await?;
+        feeds_with_lists.push(FeedWithLists {
+            feed,
+            owner_username: None,
+            article_count: count,
+            lists: feed_lists,
+        });
+    }
+
+    let drafts = GeneratedArticle::drafts_for_user(&state.db, uid).await?;
+    let published = GeneratedArticle::all_published_for_user(&state.db, uid).await?;
+    let categories = GeneratedArticle::all_categories(&state.db).await?;
+
+    Ok(UserDashboardTemplate {
+        user,
+        feeds: feeds_with_lists,
+        lists,
+        drafts,
+        published,
+        categories,
+        server_llm_enabled: SERVER_LLM_ENABLED,
+    })
+}
+
+const SERVER_LLM_ENABLED: bool = cfg!(feature = "server-llm");
+
+#[derive(Deserialize)]
+pub struct TogglePublicForm {
+    #[serde(default)]
+    pub public: Option<String>,
+}
+
+pub async fn toggle_public(
+    RequireUser(uid): RequireUser,
+    State(state): State<AppState>,
+    Form(input): Form<TogglePublicForm>,
+) -> Result<Redirect, AppError> {
+    let public = input.public.is_some();
+    User::set_public(&state.db, uid, public).await?;
+    Ok(Redirect::to("/user"))
+}
+
+// ---------- feeds ----------
+
+pub async fn create_feed(
+    RequireUser(uid): RequireUser,
+    State(state): State<AppState>,
+    Form(input): Form<CreateFeed>,
+) -> Result<Redirect, AppError> {
+    Feed::create(&state.db, &input.name, &input.url, Some(uid)).await?;
+    Ok(Redirect::to("/user"))
+}
+
+pub async fn delete_feed(
+    RequireUser(uid): RequireUser,
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+) -> Result<Redirect, AppError> {
+    Feed::delete_for_user(&state.db, id, uid).await?;
+    Ok(Redirect::to("/user"))
+}
+
+#[derive(Deserialize)]
+pub struct ImportFeedsForm {
+    pub csv: String,
+    #[serde(default)]
+    pub list_ids: Vec<i64>,
+}
+
+pub async fn import_feeds(
+    RequireUser(uid): RequireUser,
+    State(state): State<AppState>,
+    ExtraForm(input): ExtraForm<ImportFeedsForm>,
+) -> Result<Response, AppError> {
+    match feed_import::parse_csv(&input.csv) {
+        Err(errors) => {
+            let lists = List::all_for_user(&state.db, uid).await?;
+            Ok(ImportErrorsTemplate {
+                errors,
+                csv: input.csv,
+                lists,
+                form_action: "/user/feeds/import".to_string(),
+                back_url: "/user".to_string(),
+            }
+            .into_response())
+        }
+        Ok(parsed) => {
+            for feed in &parsed {
+                let feed_id = Feed::create(&state.db, &feed.name, &feed.url, Some(uid)).await?;
+                for list_id in &input.list_ids {
+                    List::add_feed_for_user(&state.db, *list_id, feed_id, uid).await?;
+                }
+            }
+            Ok(Redirect::to("/user").into_response())
+        }
+    }
+}
+
+#[derive(Deserialize)]
+pub struct AssignFeedToListForm {
+    pub list_id: i64,
+}
+
+pub async fn add_feed_to_list(
+    RequireUser(uid): RequireUser,
+    State(state): State<AppState>,
+    Path(feed_id): Path<i64>,
+    Form(input): Form<AssignFeedToListForm>,
+) -> Result<Redirect, AppError> {
+    List::add_feed_for_user(&state.db, input.list_id, feed_id, uid).await?;
+    Ok(Redirect::to("/user"))
+}
+
+pub async fn remove_feed_from_list(
+    RequireUser(uid): RequireUser,
+    State(state): State<AppState>,
+    Path((feed_id, list_id)): Path<(i64, i64)>,
+) -> Result<Redirect, AppError> {
+    List::remove_feed_for_user(&state.db, list_id, feed_id, uid).await?;
+    Ok(Redirect::to("/user"))
+}
+
+#[derive(Deserialize)]
+pub struct BulkAssignFeedsForm {
+    pub list_id: i64,
+    #[serde(default, rename = "feed_ids")]
+    pub feed_ids: Vec<i64>,
+}
+
+pub async fn bulk_add_feeds_to_list(
+    RequireUser(uid): RequireUser,
+    State(state): State<AppState>,
+    ExtraForm(input): ExtraForm<BulkAssignFeedsForm>,
+) -> Result<Redirect, AppError> {
+    for feed_id in &input.feed_ids {
+        List::add_feed_for_user(&state.db, input.list_id, *feed_id, uid).await?;
+    }
+    Ok(Redirect::to("/user"))
+}
+
+// ---------- lists ----------
+
+pub async fn create_list(
+    RequireUser(uid): RequireUser,
+    State(state): State<AppState>,
+    Form(input): Form<CreateList>,
+) -> Result<Redirect, AppError> {
+    let name = input.name.trim();
+    if name.is_empty() {
+        return Err(AppError::FeedParse("List name cannot be empty".to_string()));
+    }
+    let slug = slug::slugify(name);
+    List::create(&state.db, name, &slug, Some(uid)).await?;
+    Ok(Redirect::to("/user"))
+}
+
+pub async fn delete_list(
+    RequireUser(uid): RequireUser,
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+) -> Result<Redirect, AppError> {
+    List::delete_for_user(&state.db, id, uid).await?;
+    Ok(Redirect::to("/user"))
+}
+
+// ---------- feed fetching ----------
+
+pub async fn fetch_feed(
+    RequireUser(uid): RequireUser,
+    State(state): State<AppState>,
+    Path(feed_id): Path<i64>,
+) -> Result<Html<String>, AppError> {
+    let feed = Feed::by_id(&state.db, feed_id)
+        .await?
+        .ok_or(AppError::NotFound)?;
+    if feed.user_id != Some(uid) {
+        return Err(AppError::NotFound);
+    }
+    let count = feed_fetcher::fetch_feed(&state.db, &feed).await?;
+    Ok(Html(format!(r#"<span class="success">{count} new</span>"#)))
+}
+
+pub async fn fetch_all_feeds(
+    RequireUser(uid): RequireUser,
+    State(state): State<AppState>,
+) -> Result<Html<String>, AppError> {
+    let count = feed_fetcher::fetch_all_feeds_for_user(&state.db, uid).await?;
+    Ok(Html(format!(
+        r#"<div class="success">Fetched {count} new articles from your feeds</div>"#
+    )))
+}
+
+// ---------- article actions ----------
+
+#[derive(Deserialize)]
+pub struct SetCategoryForm {
+    pub category: String,
+}
+
+pub async fn set_category(
+    RequireUser(uid): RequireUser,
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+    Form(input): Form<SetCategoryForm>,
+) -> Result<Html<String>, AppError> {
+    let normalized = input.category.split_whitespace().collect::<Vec<_>>().join(" ");
+    if normalized.is_empty() {
+        return Err(AppError::BadRequest("Category cannot be empty".to_string()));
+    }
+    let updated = GeneratedArticle::set_category_for_user(&state.db, id, &normalized, uid).await?;
+    if !updated {
+        return Err(AppError::NotFound);
+    }
+    Ok(Html(format!(
+        r#"<span class="badge category">{}</span>"#,
+        normalized
+    )))
+}
+
+pub async fn publish(
+    RequireUser(uid): RequireUser,
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+) -> Result<Html<String>, AppError> {
+    let updated = GeneratedArticle::set_status_for_user(&state.db, id, "published", uid).await?;
+    if !updated {
+        return Err(AppError::NotFound);
+    }
+    Ok(Html(r#"<span class="badge published">Published</span>"#.to_string()))
+}
+
+pub async fn unpublish(
+    RequireUser(uid): RequireUser,
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+) -> Result<Html<String>, AppError> {
+    let updated = GeneratedArticle::set_status_for_user(&state.db, id, "draft", uid).await?;
+    if !updated {
+        return Err(AppError::NotFound);
+    }
+    Ok(Html(r#"<span class="badge">Unpublished</span>"#.to_string()))
+}
+
+pub async fn reject(
+    RequireUser(uid): RequireUser,
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+) -> Result<Html<String>, AppError> {
+    let updated = GeneratedArticle::set_status_for_user(&state.db, id, "rejected", uid).await?;
+    if !updated {
+        return Err(AppError::NotFound);
+    }
+    Ok(Html(r#"<span class="badge rejected">Rejected</span>"#.to_string()))
+}
+
+#[derive(Deserialize)]
+pub struct BulkArticleIds {
+    #[serde(default)]
+    pub ids: Vec<i64>,
+}
+
+pub async fn bulk_publish(
+    RequireUser(uid): RequireUser,
+    State(state): State<AppState>,
+    ExtraForm(input): ExtraForm<BulkArticleIds>,
+) -> Result<(HeaderMap, Html<String>), AppError> {
+    let n = GeneratedArticle::set_status_bulk_for_user(&state.db, &input.ids, "published", uid)
+        .await?;
+    Ok(refresh_response(format!("Published {n} article(s).")))
+}
+
+pub async fn bulk_unpublish(
+    RequireUser(uid): RequireUser,
+    State(state): State<AppState>,
+    ExtraForm(input): ExtraForm<BulkArticleIds>,
+) -> Result<(HeaderMap, Html<String>), AppError> {
+    let n = GeneratedArticle::set_status_bulk_for_user(&state.db, &input.ids, "draft", uid).await?;
+    Ok(refresh_response(format!("Unpublished {n} article(s).")))
+}
+
+fn refresh_response(msg: String) -> (HeaderMap, Html<String>) {
+    let mut headers = HeaderMap::new();
+    headers.insert("HX-Refresh", HeaderValue::from_static("true"));
+    (headers, Html(format!(r#"<div class="success">{msg}</div>"#)))
+}
+
+// ---------- generation (server-llm gated) ----------
+
+#[cfg(feature = "server-llm")]
+pub async fn generate_for_list(
+    RequireUser(uid): RequireUser,
+    State(state): State<AppState>,
+    Path(list_id): Path<i64>,
+) -> Result<Html<String>, AppError> {
+    if List::owner_of(&state.db, list_id).await? != Some(uid) {
+        return Err(AppError::NotFound);
+    }
+    let ids = crate::server_llm::run_list_generation(&state, list_id).await?;
+    Ok(Html(generate_response_html(ids.len(), "your list")))
+}
+
+#[cfg(feature = "server-llm")]
+pub async fn generate_all_lists(
+    RequireUser(uid): RequireUser,
+    State(state): State<AppState>,
+) -> Result<Html<String>, AppError> {
+    let lists = List::all_for_user(&state.db, uid).await?;
+    let mut all_ids = Vec::new();
+    for list in &lists {
+        match crate::server_llm::run_list_generation(&state, list.id).await {
+            Ok(mut ids) => all_ids.append(&mut ids),
+            Err(e) => tracing::error!("Generation for list '{}' failed: {e}", list.name),
+        }
+    }
+    Ok(Html(generate_response_html(
+        all_ids.len(),
+        "across your lists",
+    )))
+}
+
+#[cfg(feature = "server-llm")]
+fn generate_response_html(count: usize, scope: &str) -> String {
+    if count == 0 {
+        format!(
+            r#"<div class="info">No article clusters found ({scope}). Need more source articles from different feeds covering the same topic.</div>"#
+        )
+    } else {
+        format!(
+            r#"<div class="success">Generated {count} new article(s) ({scope}). Refresh to see drafts.</div>"#
+        )
+    }
+}

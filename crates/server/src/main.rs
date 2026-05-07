@@ -9,10 +9,19 @@ mod services;
 #[cfg(feature = "server-llm")]
 mod server_llm;
 
+use axum::http::{header, HeaderValue, StatusCode};
+use axum::response::IntoResponse;
 use axum::Router;
 use axum::routing::{get, post};
 use std::net::SocketAddr;
 use tower_http::services::ServeDir;
+
+fn permanent_redirect(target: &'static str) -> impl IntoResponse {
+    (
+        StatusCode::PERMANENT_REDIRECT,
+        [(header::LOCATION, HeaderValue::from_static(target))],
+    )
+}
 
 #[derive(Clone)]
 pub struct AppState {
@@ -77,10 +86,39 @@ async fn main() {
         // Public routes
         .route("/", get(handlers::public::index))
         .route("/article/{slug}", get(handlers::public::article))
+        .route("/user-news/{username}", get(handlers::public::user_news))
         // Auth routes
-        .route("/admin/login", get(handlers::auth::login_page))
-        .route("/admin/login", post(handlers::auth::login))
-        .route("/admin/logout", post(handlers::auth::logout))
+        .route("/login", get(handlers::auth::login_page))
+        .route("/login", post(handlers::auth::login))
+        .route("/logout", post(handlers::auth::logout))
+        .route("/register", get(handlers::user::register_page))
+        .route("/register", post(handlers::user::register))
+        // Compat: old admin login/logout paths permanently redirect to the new ones.
+        .route("/admin/login", get(|| async { permanent_redirect("/login") }))
+        .route("/admin/login", post(|| async { permanent_redirect("/login") }))
+        .route("/admin/logout", post(|| async { permanent_redirect("/logout") }))
+        // User routes (protected)
+        .route("/user", get(handlers::user::dashboard))
+        .route("/user/settings/public", post(handlers::user::toggle_public))
+        .route("/user/feeds", post(handlers::user::create_feed))
+        .route("/user/feeds/import", post(handlers::user::import_feeds))
+        .route("/user/feeds/{id}/delete", post(handlers::user::delete_feed))
+        .route("/user/feeds/lists/bulk", post(handlers::user::bulk_add_feeds_to_list))
+        .route("/user/feeds/{feed_id}/lists", post(handlers::user::add_feed_to_list))
+        .route(
+            "/user/feeds/{feed_id}/lists/{list_id}/delete",
+            post(handlers::user::remove_feed_from_list),
+        )
+        .route("/user/lists", post(handlers::user::create_list))
+        .route("/user/lists/{id}/delete", post(handlers::user::delete_list))
+        .route("/api/user/fetch-all", post(handlers::user::fetch_all_feeds))
+        .route("/api/user/fetch/{feed_id}", post(handlers::user::fetch_feed))
+        .route("/api/user/article/{id}/category", post(handlers::user::set_category))
+        .route("/api/user/article/{id}/publish", post(handlers::user::publish))
+        .route("/api/user/article/{id}/unpublish", post(handlers::user::unpublish))
+        .route("/api/user/article/{id}/reject", post(handlers::user::reject))
+        .route("/api/user/articles/bulk-publish", post(handlers::user::bulk_publish))
+        .route("/api/user/articles/bulk-unpublish", post(handlers::user::bulk_unpublish))
         // Admin routes (protected)
         .route("/admin", get(handlers::admin::dashboard))
         .route("/admin/feeds", post(handlers::admin::create_feed))
@@ -119,6 +157,14 @@ async fn main() {
         .route(
             "/api/generate/all-lists",
             post(handlers::api::generate_articles_all_lists),
+        )
+        .route(
+            "/api/user/generate/list/{list_id}",
+            post(handlers::user::generate_for_list),
+        )
+        .route(
+            "/api/user/generate/all-lists",
+            post(handlers::user::generate_all_lists),
         );
 
     let app = app

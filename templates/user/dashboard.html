@@ -1,12 +1,12 @@
 {% extends "base.html" %}
 
-{% block title %}Admin - AI News{% endblock %}
+{% block title %}Dashboard &mdash; @{{ user.username }}{% endblock %}
 
 {% block content %}
 <div class="admin-header">
-    <h1>Admin Dashboard</h1>
-    <form action="/admin/logout" method="post">
-        <button type="submit" class="btn btn-sm">Logout</button>
+    <h1>Hi, @{{ user.username }}</h1>
+    <form action="/logout" method="post">
+        <button type="submit" class="btn btn-sm">Log out</button>
     </form>
 </div>
 
@@ -19,26 +19,19 @@
 <section class="admin-section">
     <h2>Actions</h2>
     <div class="actions">
-        <button hx-post="/api/fetch-all"
+        <button hx-post="/api/user/fetch-all"
                 hx-target="#fetch-result"
                 hx-indicator="#fetch-spinner"
                 class="btn btn-primary">
-            Fetch All Feeds
+            Fetch My Feeds
         </button>
         {% if server_llm_enabled %}
-        <button hx-post="/api/generate"
+        <button hx-post="/api/user/generate/all-lists"
                 hx-target="#gen-result"
                 hx-indicator="#gen-spinner"
                 class="btn btn-primary"
-                title="Cluster across all feeds, ignoring lists">
-            Generate (unscoped)
-        </button>
-        <button hx-post="/api/generate/all-lists"
-                hx-target="#gen-result"
-                hx-indicator="#gen-spinner"
-                class="btn btn-primary"
-                title="Run a generation pass for every list">
-            Generate (all lists)
+                title="Generate articles for all of your lists">
+            Generate (all my lists)
         </button>
         {% endif %}
     </div>
@@ -48,55 +41,63 @@
     <div id="gen-result"></div>
     <span id="gen-spinner" class="htmx-indicator">Generating (this may take a while)...</span>
     {% else %}
-    <p class="empty">Article generation runs from the local <code>client</code> CLI. See README.</p>
+    <p class="empty">Article generation runs from the local <code>client</code> CLI when the server-llm feature is off.</p>
     {% endif %}
 </section>
 
 <section class="admin-section">
-    <h2>Lists</h2>
-    <p class="hint">Lists let you manually pre-cluster feeds. Generation can run per-list so the LLM only sees feeds you grouped together.</p>
+    <h2>Public news page</h2>
+    <p class="hint">When public, your articles are listed at
+        <a href="/user-news/@{{ user.username }}">/user-news/@{{ user.username }}</a>.
+        Article links you share remain accessible regardless of this setting.</p>
+    <form action="/user/settings/public" method="post" class="add-feed-form">
+        <label class="check-pill">
+            <input type="checkbox" name="public" value="1"{% if user.public %} checked{% endif %}>
+            My news page is public
+        </label>
+        <button type="submit" class="btn btn-sm">Save</button>
+    </form>
+</section>
 
-    <form action="/admin/lists" method="post" class="add-feed-form">
+<section class="admin-section">
+    <h2>Lists</h2>
+    <p class="hint">Lists pre-cluster your feeds. Generation runs per-list so the LLM only sees feeds you grouped together.</p>
+
+    <form action="/user/lists" method="post" class="add-feed-form">
         <input type="text" name="name" placeholder="List name (e.g. AI &amp; ML)" required>
         <button type="submit" class="btn">Add List</button>
     </form>
 
     {% if lists.is_empty() %}
-    <p class="empty">No lists yet. Create one to start scoping generation.</p>
+    <p class="empty">No lists yet.</p>
     {% else %}
     <table class="feeds-table">
         <thead>
             <tr>
                 <th>ID</th>
-                <th>Owner</th>
                 <th>Name</th>
                 <th>Slug</th>
                 <th>Actions</th>
             </tr>
         </thead>
         <tbody>
-            {% for item in lists %}
+            {% for list in lists %}
             <tr>
-                <td><code>{{ item.list.id }}</code></td>
-                <td>{% if let Some(u) = item.owner_username %}<span class="badge category">@{{ u }}</span>{% else %}<span class="badge">global</span>{% endif %}</td>
-                <td>{{ item.list.name }}</td>
-                <td><code>{{ item.list.slug }}</code></td>
+                <td><code>{{ list.id }}</code></td>
+                <td>{{ list.name }}</td>
+                <td><code>{{ list.slug }}</code></td>
                 <td class="actions-cell">
-                    {% if item.list.user_id.is_none() %}
                     {% if server_llm_enabled %}
-                    <button hx-post="/api/generate/list/{{ item.list.id }}"
+                    <button hx-post="/api/user/generate/list/{{ list.id }}"
                             hx-target="#gen-result"
                             hx-indicator="#gen-spinner"
                             class="btn btn-sm">
                         Generate
                     </button>
                     {% endif %}
-                    <form action="/admin/lists/{{ item.list.id }}/delete" method="post" style="display:inline">
+                    <form action="/user/lists/{{ list.id }}/delete" method="post" style="display:inline">
                         <button type="submit" class="btn btn-sm btn-danger">Delete</button>
                     </form>
-                    {% else %}
-                    <span class="hint">user-owned</span>
-                    {% endif %}
                 </td>
             </tr>
             {% endfor %}
@@ -107,21 +108,21 @@
 
 <section class="admin-section">
     <h2>RSS Feeds</h2>
-    <form action="/admin/feeds" method="post" class="add-feed-form">
+    <form action="/user/feeds" method="post" class="add-feed-form">
         <input type="text" name="name" placeholder="Feed name" required>
         <input type="url" name="url" placeholder="https://example.com/rss" required>
         <button type="submit" class="btn">Add Feed</button>
     </form>
 
-    <form action="/admin/feeds/import" method="post" class="import-feeds-form">
+    <form action="/user/feeds/import" method="post" class="import-feeds-form">
         <label for="csv">Bulk import (one feed per line, format: <code>name;url</code>)</label>
         <textarea id="csv" name="csv" rows="5"
                   placeholder="Hacker News;https://hnrss.org/frontpage&#10;The Verge;https://www.theverge.com/rss/index.xml"
                   required></textarea>
-        {% if !assignable_lists.is_empty() %}
+        {% if !lists.is_empty() %}
         <fieldset class="import-lists">
             <legend>Assign imported feeds to lists (optional)</legend>
-            {% for l in assignable_lists %}
+            {% for l in lists %}
             <label class="check-pill">
                 <input type="checkbox" name="list_ids" value="{{ l.id }}">
                 {{ l.name }}
@@ -132,16 +133,19 @@
         <button type="submit" class="btn">Import CSV</button>
     </form>
 
-    {% if !assignable_lists.is_empty() && !feeds.is_empty() %}
-    <form id="bulk-feed-form" action="/admin/feeds/lists/bulk" method="post" class="bulk-toolbar">
+    {% if feeds.is_empty() %}
+    <p class="empty">No feeds yet.</p>
+    {% else %}
+    {% if !lists.is_empty() %}
+    <form id="bulk-feed-form" action="/user/feeds/lists/bulk" method="post" class="bulk-toolbar">
         <select name="list_id" required>
             <option value="">Choose list…</option>
-            {% for l in assignable_lists %}
+            {% for l in lists %}
             <option value="{{ l.id }}">{{ l.name }}</option>
             {% endfor %}
         </select>
         <button type="submit" class="btn btn-sm">Add selected to list</button>
-        <span class="hint">Tick global rows in the first column to bulk-assign.</span>
+        <span class="hint">Tick rows in the first column to bulk-assign.</span>
     </form>
     {% endif %}
 
@@ -149,7 +153,6 @@
         <thead>
             <tr>
                 <th class="check-col"><input type="checkbox" form="bulk-feed-form" onclick="document.querySelectorAll('input.feed-check').forEach(c=>c.checked=this.checked)"></th>
-                <th>Owner</th>
                 <th>Name</th>
                 <th>URL</th>
                 <th>Articles</th>
@@ -161,8 +164,7 @@
         <tbody>
             {% for item in feeds %}
             <tr>
-                <td class="check-col">{% if item.feed.user_id.is_none() %}<input type="checkbox" class="feed-check" form="bulk-feed-form" name="feed_ids" value="{{ item.feed.id }}">{% endif %}</td>
-                <td>{% if let Some(u) = item.owner_username %}<span class="badge category">@{{ u }}</span>{% else %}<span class="badge">global</span>{% endif %}</td>
+                <td class="check-col"><input type="checkbox" class="feed-check" form="bulk-feed-form" name="feed_ids" value="{{ item.feed.id }}"></td>
                 <td>{{ item.feed.name }}</td>
                 <td class="url-cell">{{ item.feed.url }}</td>
                 <td>{{ item.article_count }}</td>
@@ -170,18 +172,16 @@
                     {% for l in item.lists %}
                     <span class="list-tag">
                         {{ l.name }}
-                        {% if item.feed.user_id.is_none() && l.user_id.is_none() %}
-                        <form action="/admin/feeds/{{ item.feed.id }}/lists/{{ l.id }}/delete" method="post" style="display:inline">
+                        <form action="/user/feeds/{{ item.feed.id }}/lists/{{ l.id }}/delete" method="post" style="display:inline">
                             <button type="submit" class="list-tag-remove" title="Remove from {{ l.name }}">&times;</button>
                         </form>
-                        {% endif %}
                     </span>
                     {% endfor %}
-                    {% if item.feed.user_id.is_none() && !assignable_lists.is_empty() %}
-                    <form action="/admin/feeds/{{ item.feed.id }}/lists" method="post" class="list-assign-form">
+                    {% if !lists.is_empty() %}
+                    <form action="/user/feeds/{{ item.feed.id }}/lists" method="post" class="list-assign-form">
                         <select name="list_id" onchange="this.form.requestSubmit()">
                             <option value="">+ add to list…</option>
-                            {% for l in assignable_lists %}
+                            {% for l in lists %}
                             <option value="{{ l.id }}">{{ l.name }}</option>
                             {% endfor %}
                         </select>
@@ -192,23 +192,20 @@
                     {{ item.feed.last_fetched_at.as_deref().unwrap_or("Never") }}
                 </td>
                 <td class="actions-cell">
-                    {% if item.feed.user_id.is_none() %}
-                    <button hx-post="/api/fetch/{{ item.feed.id }}"
+                    <button hx-post="/api/user/fetch/{{ item.feed.id }}"
                             hx-target="#feed-status-{{ item.feed.id }}"
                             class="btn btn-sm">
                         Fetch
                     </button>
-                    <form action="/admin/feeds/{{ item.feed.id }}/delete" method="post" style="display:inline">
+                    <form action="/user/feeds/{{ item.feed.id }}/delete" method="post" style="display:inline">
                         <button type="submit" class="btn btn-sm btn-danger">Delete</button>
                     </form>
-                    {% else %}
-                    <span class="hint">user-owned</span>
-                    {% endif %}
                 </td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
+    {% endif %}
 </section>
 
 <section class="admin-section">
@@ -217,10 +214,10 @@
     </div>
     <div id="publish-all-result"></div>
     {% if drafts.is_empty() %}
-    <p class="empty">No drafts. Generate some articles first.</p>
+    <p class="empty">No drafts.</p>
     {% else %}
     <div class="bulk-toolbar">
-        <button hx-post="/api/articles/bulk-publish"
+        <button hx-post="/api/user/articles/bulk-publish"
                 hx-include="input.draft-check:checked"
                 hx-target="#publish-all-result"
                 hx-confirm="Publish selected drafts?"
@@ -233,7 +230,6 @@
         <thead>
             <tr>
                 <th class="check-col"><input type="checkbox" onclick="document.querySelectorAll('input.draft-check').forEach(c=>c.checked=this.checked)"></th>
-                <th>Owner</th>
                 <th>Title</th>
                 <th>Category</th>
                 <th>Generated</th>
@@ -241,44 +237,35 @@
             </tr>
         </thead>
         <tbody>
-            {% for item in drafts %}
+            {% for draft in drafts %}
             <tr>
-                <td class="check-col">{% if item.article.user_id.is_none() %}<input type="checkbox" class="draft-check" name="ids" value="{{ item.article.id }}">{% endif %}</td>
-                <td>{% if let Some(u) = item.owner_username %}<span class="badge category">@{{ u }}</span>{% else %}<span class="badge">global</span>{% endif %}</td>
-                <td><a href="/article/{{ item.article.slug }}">{{ item.article.title }}</a></td>
-                <td id="draft-category-{{ item.article.id }}">
-                    {% if item.article.user_id.is_none() %}
-                    <form hx-post="/api/article/{{ item.article.id }}/category"
-                          hx-target="#draft-category-{{ item.article.id }}"
+                <td class="check-col"><input type="checkbox" class="draft-check" name="ids" value="{{ draft.id }}"></td>
+                <td><a href="/article/{{ draft.slug }}">{{ draft.title }}</a></td>
+                <td id="draft-category-{{ draft.id }}">
+                    <form hx-post="/api/user/article/{{ draft.id }}/category"
+                          hx-target="#draft-category-{{ draft.id }}"
                           hx-swap="innerHTML">
                         <input type="text"
                                name="category"
                                list="known-categories"
-                               value="{% if let Some(c) = item.article.category %}{{ c }}{% endif %}"
+                               value="{% if let Some(c) = draft.category %}{{ c }}{% endif %}"
                                placeholder="Pick or type new…"
                                class="category-input"
                                onchange="this.form.requestSubmit()">
                     </form>
-                    {% else %}
-                    {{ item.article.category.as_deref().unwrap_or("—") }}
-                    {% endif %}
                 </td>
-                <td>{{ item.article.generated_at }}</td>
-                <td id="draft-actions-{{ item.article.id }}">
-                    {% if item.article.user_id.is_none() %}
-                    <button hx-post="/api/article/{{ item.article.id }}/publish"
-                            hx-target="#draft-actions-{{ item.article.id }}"
+                <td>{{ draft.generated_at }}</td>
+                <td id="draft-actions-{{ draft.id }}">
+                    <button hx-post="/api/user/article/{{ draft.id }}/publish"
+                            hx-target="#draft-actions-{{ draft.id }}"
                             class="btn btn-sm btn-success">
                         Publish
                     </button>
-                    <button hx-post="/api/article/{{ item.article.id }}/reject"
-                            hx-target="#draft-actions-{{ item.article.id }}"
+                    <button hx-post="/api/user/article/{{ draft.id }}/reject"
+                            hx-target="#draft-actions-{{ draft.id }}"
                             class="btn btn-sm btn-danger">
                         Reject
                     </button>
-                    {% else %}
-                    <span class="hint">user-owned</span>
-                    {% endif %}
                 </td>
             </tr>
             {% endfor %}
@@ -296,7 +283,7 @@
     <p class="empty">No published articles yet.</p>
     {% else %}
     <div class="bulk-toolbar">
-        <button hx-post="/api/articles/bulk-unpublish"
+        <button hx-post="/api/user/articles/bulk-unpublish"
                 hx-include="input.published-check:checked"
                 hx-target="#bulk-unpublish-result"
                 hx-confirm="Unpublish selected articles? They will return to drafts."
@@ -309,7 +296,6 @@
         <thead>
             <tr>
                 <th class="check-col"><input type="checkbox" onclick="document.querySelectorAll('input.published-check').forEach(c=>c.checked=this.checked)"></th>
-                <th>Owner</th>
                 <th>Title</th>
                 <th>Category</th>
                 <th>Published</th>
@@ -317,24 +303,19 @@
             </tr>
         </thead>
         <tbody>
-            {% for item in published %}
+            {% for article in published %}
             <tr>
-                <td class="check-col">{% if item.article.user_id.is_none() %}<input type="checkbox" class="published-check" name="ids" value="{{ item.article.id }}">{% endif %}</td>
-                <td>{% if let Some(u) = item.owner_username %}<span class="badge category">@{{ u }}</span>{% else %}<span class="badge">global</span>{% endif %}</td>
-                <td><a href="/article/{{ item.article.slug }}">{{ item.article.title }}</a></td>
-                <td>{{ item.article.category.as_deref().unwrap_or("—") }}</td>
-                <td>{{ item.article.formatted_published_at() }}</td>
-                <td id="published-actions-{{ item.article.id }}">
-                    {% if item.article.user_id.is_none() %}
-                    <button hx-post="/api/article/{{ item.article.id }}/unpublish"
-                            hx-target="#published-actions-{{ item.article.id }}"
+                <td class="check-col"><input type="checkbox" class="published-check" name="ids" value="{{ article.id }}"></td>
+                <td><a href="/article/{{ article.slug }}">{{ article.title }}</a></td>
+                <td>{{ article.category.as_deref().unwrap_or("—") }}</td>
+                <td>{{ article.formatted_published_at() }}</td>
+                <td id="published-actions-{{ article.id }}">
+                    <button hx-post="/api/user/article/{{ article.id }}/unpublish"
+                            hx-target="#published-actions-{{ article.id }}"
                             hx-confirm="Unpublish this article? It will return to drafts."
                             class="btn btn-sm btn-danger">
                         Unpublish
                     </button>
-                    {% else %}
-                    <span class="hint">user-owned</span>
-                    {% endif %}
                 </td>
             </tr>
             {% endfor %}

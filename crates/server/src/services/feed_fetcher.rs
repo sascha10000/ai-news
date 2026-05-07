@@ -74,3 +74,21 @@ pub async fn fetch_all_feeds(pool: &SqlitePool) -> Result<usize, AppError> {
     }
     Ok(total)
 }
+
+pub async fn fetch_all_feeds_for_user(
+    pool: &SqlitePool,
+    user_id: i64,
+) -> Result<usize, AppError> {
+    let feeds = Feed::all_for_user(pool, user_id).await?;
+    let mut total = 0;
+    for feed in &feeds {
+        if !feed.active {
+            continue;
+        }
+        match fetch_feed(pool, feed).await {
+            Ok(count) => total += count,
+            Err(e) => tracing::error!("Failed to fetch feed '{}': {e}", feed.name),
+        }
+    }
+    Ok(total)
+}

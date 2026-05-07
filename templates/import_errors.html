@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+
+{% block title %}CSV import &mdash; errors{% endblock %}
+
+{% block content %}
+<div class="admin-header">
+    <h1>CSV import &mdash; please fix {{ errors.len() }} error(s)</h1>
+    <a href="{{ back_url }}" class="btn btn-sm">Cancel</a>
+</div>
+
+<section class="admin-section">
+    <p class="hint">Nothing was saved. Fix the errors below and resubmit. Lines you didn&rsquo;t change stay as they were.</p>
+
+    <table class="feeds-table">
+        <thead>
+            <tr><th>Line</th><th>Problem</th><th>Content</th></tr>
+        </thead>
+        <tbody>
+            {% for err in errors %}
+            <tr>
+                <td><code>{{ err.line }}</code></td>
+                <td>{{ err.message }}</td>
+                <td class="url-cell"><code>{{ err.raw }}</code></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <form action="{{ form_action }}" method="post" class="import-feeds-form">
+        <label for="csv">Edit and resubmit:</label>
+        <textarea id="csv" name="csv" rows="10" required>{{ csv }}</textarea>
+        {% if !lists.is_empty() %}
+        <fieldset class="import-lists">
+            <legend>Assign imported feeds to lists (optional)</legend>
+            {% for l in lists %}
+            <label class="check-pill">
+                <input type="checkbox" name="list_ids" value="{{ l.id }}">
+                {{ l.name }}
+            </label>
+            {% endfor %}
+        </fieldset>
+        {% endif %}
+        <button type="submit" class="btn">Import CSV</button>
+    </form>
+</section>
+{% endblock %}

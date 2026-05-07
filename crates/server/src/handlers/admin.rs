@@ -1,7 +1,7 @@
 use askama::Template;
 use askama_web::WebTemplate;
 use axum::extract::{Path, State};
-use axum::response::Redirect;
+use axum::response::{IntoResponse, Redirect, Response};
 use axum::Form;
 use axum_extra::extract::Form as ExtraForm;
 
@@ -9,11 +9,22 @@ use serde::Deserialize;
 
 use crate::error::AppError;
 use crate::models::feed::{CreateFeed, Feed};
-use crate::models::generated_article::GeneratedArticle;
-use crate::models::list::{CreateList, List};
+use crate::models::generated_article::{ArticleWithOwner, GeneratedArticle};
+use crate::models::list::{CreateList, List, ListWithOwner};
 use crate::models::source_article::SourceArticle;
+use crate::services::feed_import::{self, ImportError};
 
-use super::auth::RequireAuth;
+#[derive(Template, WebTemplate)]
+#[template(path = "import_errors.html")]
+pub struct ImportErrorsTemplate {
+    pub errors: Vec<ImportError>,
+    pub csv: String,
+    pub lists: Vec<List>,
+    pub form_action: String,
+    pub back_url: String,
+}
+
+use super::auth::RequireAdmin;
 use super::super::AppState;
 
 const SERVER_LLM_ENABLED: bool = cfg!(feature = "server-llm");
@@ -22,43 +33,49 @@ const SERVER_LLM_ENABLED: bool = cfg!(feature = "server-llm");
 #[template(path = "admin/dashboard.html")]
 pub struct DashboardTemplate {
     pub feeds: Vec<FeedWithLists>,
-    pub lists: Vec<List>,
-    pub drafts: Vec<GeneratedArticle>,
-    pub published: Vec<GeneratedArticle>,
+    pub lists: Vec<ListWithOwner>,
+    pub assignable_lists: Vec<List>,
+    pub drafts: Vec<ArticleWithOwner>,
+    pub published: Vec<ArticleWithOwner>,
     pub categories: Vec<String>,
     pub server_llm_enabled: bool,
 }
 
 pub struct FeedWithLists {
     pub feed: Feed,
+    pub owner_username: Option<String>,
     pub article_count: i64,
     pub lists: Vec<List>,
 }
 
 pub async fn dashboard(
-    _auth: RequireAuth,
+    _auth: RequireAdmin,
     State(state): State<AppState>,
 ) -> Result<DashboardTemplate, AppError> {
-    let feeds = Feed::all(&state.db).await?;
-    let lists = List::all(&state.db).await?;
+    let feeds = Feed::all_with_owner(&state.db).await?;
+    let lists = List::all_with_owner(&state.db).await?;
+    let assignable_lists = List::all_global(&state.db).await?;
+
     let mut feeds_with_lists = Vec::new();
-    for feed in feeds {
-        let count = SourceArticle::count_for_feed(&state.db, feed.id).await?;
-        let feed_lists = List::lists_for_feed(&state.db, feed.id).await?;
+    for fw in feeds {
+        let count = SourceArticle::count_for_feed(&state.db, fw.feed.id).await?;
+        let feed_lists = List::lists_for_feed(&state.db, fw.feed.id).await?;
         feeds_with_lists.push(FeedWithLists {
-            feed,
+            feed: fw.feed,
+            owner_username: fw.owner_username,
             article_count: count,
             lists: feed_lists,
         });
     }
 
-    let drafts = GeneratedArticle::drafts(&state.db).await?;
-    let published = GeneratedArticle::all_published(&state.db).await?;
+    let drafts = GeneratedArticle::drafts_with_owner(&state.db).await?;
+    let published = GeneratedArticle::all_published_with_owner(&state.db).await?;
     let categories = GeneratedArticle::all_categories(&state.db).await?;
 
     Ok(DashboardTemplate {
         feeds: feeds_with_lists,
         lists,
+        assignable_lists,
         drafts,
         published,
         categories,
@@ -67,7 +84,7 @@ pub async fn dashboard(
 }
 
 pub async fn create_list(
-    _auth: RequireAuth,
+    _auth: RequireAdmin,
     State(state): State<AppState>,
     Form(input): Form<CreateList>,
 ) -> Result<Redirect, AppError> {
@@ -76,12 +93,12 @@ pub async fn create_list(
         return Err(AppError::FeedParse("List name cannot be empty".to_string()));
     }
     let slug = slug::slugify(name);
-    List::create(&state.db, name, &slug).await?;
+    List::create(&state.db, name, &slug, None).await?;
     Ok(Redirect::to("/admin"))
 }
 
 pub async fn delete_list(
-    _auth: RequireAuth,
+    _auth: RequireAdmin,
     State(state): State<AppState>,
     Path(id): Path<i64>,
 ) -> Result<Redirect, AppError> {
@@ -95,7 +112,7 @@ pub struct AssignFeedToList {
 }
 
 pub async fn add_feed_to_list(
-    _auth: RequireAuth,
+    _auth: RequireAdmin,
     State(state): State<AppState>,
     Path(feed_id): Path<i64>,
     Form(input): Form<AssignFeedToList>,
@@ -112,7 +129,7 @@ pub struct BulkAssignFeedsToList {
 }
 
 pub async fn bulk_add_feeds_to_list(
-    _auth: RequireAuth,
+    _auth: RequireAdmin,
     State(state): State<AppState>,
     ExtraForm(input): ExtraForm<BulkAssignFeedsToList>,
 ) -> Result<Redirect, AppError> {
@@ -123,7 +140,7 @@ pub async fn bulk_add_feeds_to_list(
 }
 
 pub async fn remove_feed_from_list(
-    _auth: RequireAuth,
+    _auth: RequireAdmin,
     State(state): State<AppState>,
     Path((feed_id, list_id)): Path<(i64, i64)>,
 ) -> Result<Redirect, AppError> {
@@ -132,11 +149,11 @@ pub async fn remove_feed_from_list(
 }
 
 pub async fn create_feed(
-    _auth: RequireAuth,
+    _auth: RequireAdmin,
     State(state): State<AppState>,
     Form(input): Form<CreateFeed>,
 ) -> Result<Redirect, AppError> {
-    Feed::create(&state.db, &input.name, &input.url).await?;
+    Feed::create(&state.db, &input.name, &input.url, None).await?;
     Ok(Redirect::to("/admin"))
 }
 
@@ -148,39 +165,36 @@ pub struct ImportFeeds {
 }
 
 pub async fn import_feeds(
-    _auth: RequireAuth,
+    _auth: RequireAdmin,
     State(state): State<AppState>,
     ExtraForm(input): ExtraForm<ImportFeeds>,
-) -> Result<Redirect, AppError> {
-    for (idx, raw) in input.csv.lines().enumerate() {
-        let line = raw.trim();
-        if line.is_empty() {
-            continue;
+) -> Result<Response, AppError> {
+    match feed_import::parse_csv(&input.csv) {
+        Err(errors) => {
+            let lists = List::all_global(&state.db).await?;
+            Ok(ImportErrorsTemplate {
+                errors,
+                csv: input.csv,
+                lists,
+                form_action: "/admin/feeds/import".to_string(),
+                back_url: "/admin".to_string(),
+            }
+            .into_response())
         }
-        let (name, url) = line.split_once(';').ok_or_else(|| {
-            AppError::FeedParse(format!(
-                "Line {}: expected 'name;url', got: {line}",
-                idx + 1
-            ))
-        })?;
-        let name = name.trim();
-        let url = url.trim();
-        if name.is_empty() || url.is_empty() {
-            return Err(AppError::FeedParse(format!(
-                "Line {}: name and url must be non-empty",
-                idx + 1
-            )));
-        }
-        let feed_id = Feed::create(&state.db, name, url).await?;
-        for list_id in &input.list_ids {
-            List::add_feed(&state.db, *list_id, feed_id).await?;
+        Ok(parsed) => {
+            for feed in &parsed {
+                let feed_id = Feed::create(&state.db, &feed.name, &feed.url, None).await?;
+                for list_id in &input.list_ids {
+                    List::add_feed(&state.db, *list_id, feed_id).await?;
+                }
+            }
+            Ok(Redirect::to("/admin").into_response())
         }
     }
-    Ok(Redirect::to("/admin"))
 }
 
 pub async fn delete_feed(
-    _auth: RequireAuth,
+    _auth: RequireAdmin,
     State(state): State<AppState>,
     Path(id): Path<i64>,
 ) -> Result<Redirect, AppError> {

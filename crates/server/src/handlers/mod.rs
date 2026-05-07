@@ -3,3 +3,4 @@ pub mod api;
 pub mod auth;
 pub mod public;
 pub mod remote;
+pub mod user;

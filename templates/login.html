@@ -1,16 +1,16 @@
 {% extends "base.html" %}
 
-{% block title %}Login - AI News Admin{% endblock %}
+{% block title %}Log in &mdash; AI News{% endblock %}
 
 {% block content %}
 <div class="login-container">
-    <h1>Admin Login</h1>
+    <h1>Log in</h1>
 
     {% if let Some(msg) = error %}
     <div class="error">{{ msg }}</div>
     {% endif %}
 
-    <form action="/admin/login" method="post" class="login-form">
+    <form action="/login" method="post" class="login-form">
         <label for="username">Username</label>
         <input type="text" id="username" name="username" required autofocus>
 
@@ -19,5 +19,7 @@
 
         <button type="submit" class="btn btn-primary">Log in</button>
     </form>
+
+    <p class="login-aside">No account? <a href="/register">Register</a></p>
 </div>
 {% endblock %}

@@ -9,12 +9,12 @@ use serde::Deserialize;
 use time::Duration;
 
 use crate::error::AppError;
-use crate::models::session::Session;
+use crate::models::session::{Identity, Session};
 
 use super::super::AppState;
 
 #[derive(Template, WebTemplate)]
-#[template(path = "admin/login.html")]
+#[template(path = "login.html")]
 pub struct LoginTemplate {
     pub error: Option<String>,
 }
@@ -25,8 +25,16 @@ pub struct LoginForm {
     pub password: String,
 }
 
-pub async fn login_page() -> LoginTemplate {
-    LoginTemplate { error: None }
+pub async fn login_page(
+    State(state): State<AppState>,
+    jar: CookieJar,
+) -> Result<Redirect, LoginTemplate> {
+    if let Some(cookie) = jar.get("session") {
+        if let Ok(Some(identity)) = Session::validate(&state.db, cookie.value()).await {
+            return Ok(Redirect::to(post_login_path(identity)));
+        }
+    }
+    Err(LoginTemplate { error: None })
 }
 
 pub async fn login(
@@ -34,15 +42,28 @@ pub async fn login(
     jar: CookieJar,
     Form(input): Form<LoginForm>,
 ) -> Result<(CookieJar, Redirect), LoginTemplate> {
-    if input.username != state.admin_username || input.password != state.admin_password {
-        return Err(LoginTemplate {
-            error: Some("Invalid username or password".to_string()),
-        });
-    }
+    let identity = if input.username == state.admin_username
+        && constant_time_eq(input.password.as_bytes(), state.admin_password.as_bytes())
+    {
+        Some(Identity::Admin)
+    } else {
+        match crate::models::user::User::authenticate(&state.db, &input.username, &input.password)
+            .await
+        {
+            Ok(Some(user)) => Some(Identity::User(user.id)),
+            _ => None,
+        }
+    };
 
-    let token = Session::create(&state.db).await.map_err(|_| LoginTemplate {
-        error: Some("Server error, please try again".to_string()),
+    let identity = identity.ok_or_else(|| LoginTemplate {
+        error: Some("Invalid username or password".to_string()),
     })?;
+
+    let token = Session::create(&state.db, identity)
+        .await
+        .map_err(|_| LoginTemplate {
+            error: Some("Server error, please try again".to_string()),
+        })?;
 
     let cookie = Cookie::build(("session", token))
         .path("/")
@@ -51,7 +72,14 @@ pub async fn login(
         .same_site(axum_extra::extract::cookie::SameSite::Lax)
         .build();
 
-    Ok((jar.add(cookie), Redirect::to("/admin")))
+    Ok((jar.add(cookie), Redirect::to(post_login_path(identity))))
+}
+
+fn post_login_path(identity: Identity) -> &'static str {
+    match identity {
+        Identity::Admin => "/admin",
+        Identity::User(_) => "/user",
+    }
 }
 
 pub async fn logout(
@@ -67,32 +95,71 @@ pub async fn logout(
         .max_age(Duration::ZERO)
         .build();
 
-    Ok((jar.remove(cookie), Redirect::to("/admin/login")))
+    Ok((jar.remove(cookie), Redirect::to("/login")))
 }
 
-/// Extractor: validates the session cookie. Redirects to login if invalid.
-pub struct RequireAuth;
+/// Resolve the session cookie to an `Identity`, or `Err` if missing/invalid.
+async fn resolve_identity(
+    parts: &mut axum::http::request::Parts,
+    state: &AppState,
+) -> Result<Identity, Redirect> {
+    let jar = CookieJar::from_headers(&parts.headers);
+    let token = jar
+        .get("session")
+        .map(|c| c.value().to_string())
+        .ok_or(Redirect::to("/login"))?;
+    Session::validate(&state.db, &token)
+        .await
+        .map_err(|_| Redirect::to("/login"))?
+        .ok_or(Redirect::to("/login"))
+}
 
-impl axum::extract::FromRequestParts<AppState> for RequireAuth {
+/// Extractor: requires an admin session. User sessions are rejected.
+pub struct RequireAdmin;
+
+impl axum::extract::FromRequestParts<AppState> for RequireAdmin {
     type Rejection = Redirect;
 
     async fn from_request_parts(
         parts: &mut axum::http::request::Parts,
         state: &AppState,
     ) -> Result<Self, Self::Rejection> {
-        let jar = CookieJar::from_headers(&parts.headers);
+        match resolve_identity(parts, state).await? {
+            Identity::Admin => Ok(RequireAdmin),
+            Identity::User(_) => Err(Redirect::to("/user")),
+        }
+    }
+}
 
-        let token = jar
-            .get("session")
-            .map(|c| c.value().to_string())
-            .ok_or(Redirect::to("/admin/login"))?;
+/// Extractor: requires a user session. Admin sessions are rejected.
+pub struct RequireUser(pub i64);
 
-        Session::validate(&state.db, &token)
-            .await
-            .map_err(|_| Redirect::to("/admin/login"))?
-            .ok_or(Redirect::to("/admin/login"))?;
+impl axum::extract::FromRequestParts<AppState> for RequireUser {
+    type Rejection = Redirect;
 
-        Ok(RequireAuth)
+    async fn from_request_parts(
+        parts: &mut axum::http::request::Parts,
+        state: &AppState,
+    ) -> Result<Self, Self::Rejection> {
+        match resolve_identity(parts, state).await? {
+            Identity::User(uid) => Ok(RequireUser(uid)),
+            Identity::Admin => Err(Redirect::to("/admin")),
+        }
+    }
+}
+
+/// Extractor: any logged-in identity.
+#[allow(dead_code)]
+pub struct AuthIdentity(pub Identity);
+
+impl axum::extract::FromRequestParts<AppState> for AuthIdentity {
+    type Rejection = Redirect;
+
+    async fn from_request_parts(
+        parts: &mut axum::http::request::Parts,
+        state: &AppState,
+    ) -> Result<Self, Self::Rejection> {
+        Ok(AuthIdentity(resolve_identity(parts, state).await?))
     }
 }
 

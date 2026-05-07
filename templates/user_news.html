@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block title %}AI News by @{{ username }}{% endblock %}
+
+{% block tagline %}<p class="tagline">Articles by <strong>@{{ username }}</strong> &middot; Synthesized news with full source attribution.</p>{% endblock %}
+
+{% block content %}
+{% if !categories.is_empty() %}
+<nav class="category-bar">
+    <a href="/user-news/@{{ username }}" class="category-pill{% if active_category.is_none() %} active{% endif %}">All</a>
+    {% for cat in categories %}
+    <a href="/user-news/@{{ username }}?category={{ cat }}"
+       class="category-pill{% if active_category.as_deref() == Some(cat.as_str()) %} active{% endif %}">
+        {{ cat }}
+    </a>
+    {% endfor %}
+</nav>
+{% endif %}
+
+{% if articles.is_empty() %}
+<p class="empty">No published articles yet from @{{ username }}.</p>
+{% else %}
+<div id="article-list" class="article-grid">
+    {% for article in articles %}
+    {% include "partials/article_card.html" %}
+    {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

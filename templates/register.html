@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+
+{% block title %}Register &mdash; AI News{% endblock %}
+
+{% block content %}
+<div class="login-container">
+    <h1>Register</h1>
+
+    {% if let Some(msg) = error %}
+    <div class="error">{{ msg }}</div>
+    {% endif %}
+
+    <form action="/register" method="post" class="login-form">
+        <label for="username">Username</label>
+        <input type="text" id="username" name="username"
+               minlength="3" maxlength="32" pattern="[a-z0-9_-]{3,32}"
+               required autofocus
+               value="{% if let Some(v) = username %}{{ v }}{% endif %}">
+        <p class="hint">3&ndash;32 chars, lowercase a&ndash;z, 0&ndash;9, dash, underscore.</p>
+
+        <label for="password">Password</label>
+        <input type="password" id="password" name="password" minlength="8" required>
+
+        <label for="password_confirm">Confirm password</label>
+        <input type="password" id="password_confirm" name="password_confirm" minlength="8" required>
+
+        <button type="submit" class="btn btn-primary">Create account</button>
+    </form>
+
+    <p class="login-aside">Already have an account? <a href="/login">Log in</a></p>
+</div>
+{% endblock %}
