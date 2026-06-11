@@ -47,9 +47,13 @@
 
 <section class="admin-section">
     <h2>Public news page</h2>
-    <p class="hint">When public, your articles are listed at
-        <a href="/user-news/@{{ user.username }}">/user-news/@{{ user.username }}</a>.
-        Article links you share remain accessible regardless of this setting.</p>
+    <p class="hint">Your news page lives at
+        <a href="/user-news/@{{ user.username }}">/user-news/@{{ user.username }}</a> &mdash;
+        you can always preview it here while logged in.
+        {% if user.public %}It is currently <strong>public</strong>, so anyone can read it.
+        {% else %}It is currently <strong>private</strong>, so only you (and the admin) can open it.
+        {% endif %}
+        Article links you share stay accessible regardless of this setting.</p>
     <form action="/user/settings/public" method="post" class="add-feed-form">
         <label class="check-pill">
             <input type="checkbox" name="public" value="1"{% if user.public %} checked{% endif %}>

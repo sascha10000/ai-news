@@ -1,11 +1,13 @@
 use askama::Template;
 use askama_web::WebTemplate;
 use axum::extract::{Path, Query, State};
+use axum_extra::extract::cookie::CookieJar;
 use serde::Deserialize;
 
 use crate::error::AppError;
 use crate::models::citation::{self, SentenceWithSources, SourceRef};
 use crate::models::generated_article::GeneratedArticle;
+use crate::models::session::{Identity, Session};
 use crate::models::user::{is_valid_username, User};
 
 use super::super::AppState;
@@ -96,6 +98,7 @@ pub async fn article(
 
 pub async fn user_news(
     State(state): State<AppState>,
+    jar: CookieJar,
     Path(username_with_at): Path<String>,
     Query(params): Query<Pagination>,
 ) -> Result<UserNewsTemplate, AppError> {
@@ -109,8 +112,20 @@ pub async fn user_news(
     let user = User::by_username(&state.db, &username)
         .await?
         .ok_or(AppError::NotFound)?;
+
     if !user.public {
-        return Err(AppError::NotFound);
+        let identity = match jar.get("session") {
+            Some(cookie) => Session::validate(&state.db, cookie.value()).await?,
+            None => None,
+        };
+        let allowed = match identity {
+            Some(Identity::Admin) => true,
+            Some(Identity::User(id)) => id == user.id,
+            None => false,
+        };
+        if !allowed {
+            return Err(AppError::NotFound);
+        }
     }
 
     let page = params.page.unwrap_or(1).max(1);
