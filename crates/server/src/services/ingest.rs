@@ -34,7 +34,7 @@ pub async fn ingest_articles(
                     owner
                 }
             },
-            None => None,
+            None => article.user_id,
         };
 
         let id = GeneratedArticle::insert(

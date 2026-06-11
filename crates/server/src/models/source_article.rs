@@ -82,11 +82,12 @@ impl SourceArticle {
             None => {
                 sqlx::query_as::<_, SourceArticle>(&format!(
                     "{base}
+                     AND sa.feed_id IN (SELECT id FROM feeds WHERE user_id IS NULL)
                      AND sa.id NOT IN (
                          SELECT sc.source_article_id FROM sentence_citations sc
                          JOIN generated_sentences gs ON gs.id = sc.sentence_id
                          JOIN generated_articles ga ON ga.id = gs.generated_article_id
-                         WHERE ga.list_id IS NULL
+                         WHERE ga.list_id IS NULL AND ga.user_id IS NULL
                      )
                      ORDER BY sa.published_at DESC"
                 ))
@@ -96,6 +97,35 @@ impl SourceArticle {
                 .await
             }
         }
+    }
+
+    pub async fn recent_uncited_for_user(
+        pool: &SqlitePool,
+        fetched_within_hours: i64,
+        max_published_age_days: i64,
+        user_id: i64,
+    ) -> Result<Vec<SourceArticle>, sqlx::Error> {
+        sqlx::query_as::<_, SourceArticle>(
+            "SELECT sa.* FROM source_articles sa
+             WHERE sa.fetched_at > datetime('now', ? || ' hours')
+             AND sa.published_at IS NOT NULL
+             AND datetime(sa.published_at) IS NOT NULL
+             AND datetime(sa.published_at) > datetime('now', ? || ' days')
+             AND sa.feed_id IN (SELECT id FROM feeds WHERE user_id = ?)
+             AND sa.id NOT IN (
+                 SELECT sc.source_article_id FROM sentence_citations sc
+                 JOIN generated_sentences gs ON gs.id = sc.sentence_id
+                 JOIN generated_articles ga ON ga.id = gs.generated_article_id
+                 WHERE ga.user_id = ?
+             )
+             ORDER BY sa.published_at DESC",
+        )
+        .bind(-fetched_within_hours)
+        .bind(-max_published_age_days)
+        .bind(user_id)
+        .bind(user_id)
+        .fetch_all(pool)
+        .await
     }
 
     pub async fn by_ids(pool: &SqlitePool, ids: &[i64]) -> Result<Vec<SourceArticle>, sqlx::Error> {

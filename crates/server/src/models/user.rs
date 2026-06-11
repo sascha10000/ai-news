@@ -59,6 +59,14 @@ impl User {
         }
     }
 
+    pub async fn all_brief(pool: &SqlitePool) -> Result<Vec<(i64, String)>, sqlx::Error> {
+        sqlx::query_as::<_, (i64, String)>(
+            "SELECT id, username FROM users ORDER BY username",
+        )
+        .fetch_all(pool)
+        .await
+    }
+
     pub async fn by_id(pool: &SqlitePool, id: i64) -> Result<Option<User>, sqlx::Error> {
         sqlx::query_as::<_, User>(
             "SELECT id, username, public, created_at FROM users WHERE id = ?",

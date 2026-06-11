@@ -32,6 +32,8 @@ pub struct IngestArticleRequest {
     pub sentences: Vec<IngestSentence>,
     #[serde(default)]
     pub list_id: Option<i64>,
+    #[serde(default)]
+    pub user_id: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -49,9 +51,24 @@ pub struct ListSummary {
     pub id: i64,
     pub name: String,
     pub slug: String,
+    #[serde(default)]
+    pub user_id: Option<i64>,
+    #[serde(default)]
+    pub username: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ListsResponse {
     pub lists: Vec<ListSummary>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UserSummary {
+    pub id: i64,
+    pub username: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UsersResponse {
+    pub users: Vec<UserSummary>,
 }

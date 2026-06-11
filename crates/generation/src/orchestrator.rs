@@ -93,6 +93,7 @@ async fn generate_one(
                     category: output.category,
                     sentences,
                     list_id,
+                    user_id: None,
                 });
             }
             Err(e) => {

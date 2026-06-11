@@ -145,6 +145,7 @@ async fn main() {
         // Token-protected remote-control API
         .route("/api/sources/pending", get(handlers::remote::pending_sources))
         .route("/api/lists", get(handlers::remote::lists))
+        .route("/api/users", get(handlers::remote::users))
         .route("/api/articles/ingest", post(handlers::remote::ingest_articles));
 
     #[cfg(feature = "server-llm")]
