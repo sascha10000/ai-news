@@ -607,8 +607,16 @@ th { font-weight: 600; }
 .login-form .btn { width: 100%; padding: 0.7rem; }
 
 /* ============================================================
-   THE EDITOR'S DESK — admin reskin
+   THE EDITOR'S DESK — admin / user backoffice reskin
    ============================================================ */
+
+/* Desk surfaces use the full shell width (not the public reading column).
+   --shell is read by <header>, <main>, and <footer> — overriding it on
+   the body cascades to all three so masthead, TOC, content, banner and
+   footer all share the same column edges. */
+body:has(.desk-masthead) {
+    --shell: min(1400px, calc(100vw - 3rem));
+}
 
 .desk-masthead {
     padding: 2.25rem 0 0.75rem;

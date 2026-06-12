@@ -1,14 +1,29 @@
 {% extends "base.html" %}
 
-{% block title %}Dashboard &mdash; @{{ user.username }}{% endblock %}
+{% block title %}@{{ user.username }} &mdash; AI News{% endblock %}
+
+{% block tagline %}{% endblock %}
 
 {% block content %}
-<div class="admin-header">
-    <h1>Hi, @{{ user.username }}</h1>
-    <form action="/logout" method="post">
-        <button type="submit" class="btn btn-sm">Log out</button>
+<header class="desk-masthead">
+    <h1>@{{ user.username }}</h1>
+    <div class="desk-meta">
+        <span id="desk-date">Edition &mdash; today</span>
+        <span class="sep">·</span>
+        <span class="count"><em>{{ drafts.len() }}</em>drafts queued</span>
+        <span class="sep">·</span>
+        <span class="count"><em>{{ published.len() }}</em>published</span>
+        <span class="sep">·</span>
+        <span class="count"><em>{{ lists.len() }}</em>lists</span>
+        <span class="sep">·</span>
+        <span class="count"><em>{{ feeds.len() }}</em>feeds</span>
+        <span class="sep">·</span>
+        <span class="count">{% if user.public %}public byline{% else %}private byline{% endif %}</span>
+    </div>
+    <form action="/logout" method="post" class="logout">
+        <button type="submit">Sign off</button>
     </form>
-</div>
+</header>
 
 <datalist id="known-categories">
     {% for cat in categories %}
@@ -16,8 +31,51 @@
     {% endfor %}
 </datalist>
 
-<section class="admin-section">
-    <h2>Actions</h2>
+<div class="desk-layout">
+<nav class="desk-toc" aria-label="Sections">
+    <p class="toc-label">§ Contents</p>
+    <a href="#sec-operations">
+        <span class="toc-num">I</span>
+        <span class="toc-name">Operations</span>
+        <span class="toc-leader"></span>
+        <span class="toc-count">&mdash;</span>
+    </a>
+    <a href="#sec-profile">
+        <span class="toc-num">II</span>
+        <span class="toc-name">Profile</span>
+        <span class="toc-leader"></span>
+        <span class="toc-count">{% if user.public %}pub{% else %}prv{% endif %}</span>
+    </a>
+    <a href="#sec-clusters">
+        <span class="toc-num">III</span>
+        <span class="toc-name">Lists</span>
+        <span class="toc-leader"></span>
+        <span class="toc-count">{{ lists.len() }}</span>
+    </a>
+    <a href="#sec-wire">
+        <span class="toc-num">IV</span>
+        <span class="toc-name">Feeds</span>
+        <span class="toc-leader"></span>
+        <span class="toc-count">{{ feeds.len() }}</span>
+    </a>
+    <a href="#sec-drafts">
+        <span class="toc-num">V</span>
+        <span class="toc-name">Unpublished</span>
+        <span class="toc-leader"></span>
+        <span class="toc-count">{{ drafts.len() }}</span>
+    </a>
+    <a href="#sec-published">
+        <span class="toc-num">VI</span>
+        <span class="toc-name">Published</span>
+        <span class="toc-leader"></span>
+        <span class="toc-count">{{ published.len() }}</span>
+    </a>
+</nav>
+
+<div class="desk-content">
+
+<section class="desk-section" id="sec-operations">
+    <h2>Operations <span class="eyebrow">your wire room</span></h2>
     <div class="actions">
         <button hx-post="/api/user/fetch-all"
                 hx-target="#fetch-result"
@@ -45,8 +103,8 @@
     {% endif %}
 </section>
 
-<section class="admin-section">
-    <h2>Public news page</h2>
+<section class="desk-section" id="sec-profile">
+    <h2>Byline <span class="eyebrow">your public news page</span></h2>
     <p class="hint">Your news page lives at
         <a href="/user-news/@{{ user.username }}">/user-news/@{{ user.username }}</a> &mdash;
         you can always preview it here while logged in.
@@ -63,8 +121,8 @@
     </form>
 </section>
 
-<section class="admin-section">
-    <h2>Lists</h2>
+<section class="desk-section" id="sec-clusters">
+    <h2>Clusters <span class="eyebrow">lists &amp; assignments</span></h2>
     <p class="hint">Lists pre-cluster your feeds. Generation runs per-list so the LLM only sees feeds you grouped together.</p>
 
     <form action="/user/lists" method="post" class="add-feed-form">
@@ -110,8 +168,8 @@
     {% endif %}
 </section>
 
-<section class="admin-section">
-    <h2>RSS Feeds</h2>
+<section class="desk-section" id="sec-wire">
+    <h2>Wire <span class="eyebrow">your RSS feeds &amp; sources</span></h2>
     <form action="/user/feeds" method="post" class="add-feed-form">
         <input type="text" name="name" placeholder="Feed name" required>
         <input type="url" name="url" placeholder="https://example.com/rss" required>
@@ -212,10 +270,8 @@
     {% endif %}
 </section>
 
-<section class="admin-section">
-    <div class="section-header">
-        <h2>Draft Articles</h2>
-    </div>
+<section class="desk-section" id="sec-drafts">
+    <h2>Copy desk <span class="eyebrow">drafts awaiting decision</span></h2>
     <div id="publish-all-result"></div>
     {% if drafts.is_empty() %}
     <p class="empty">No drafts.</p>
@@ -285,10 +341,8 @@
     {% endif %}
 </section>
 
-<section class="admin-section">
-    <div class="section-header">
-        <h2>Published Articles</h2>
-    </div>
+<section class="desk-section" id="sec-published">
+    <h2>On press <span class="eyebrow">live edition</span></h2>
     <div id="bulk-unpublish-result"></div>
     {% if published.is_empty() %}
     <p class="empty">No published articles yet.</p>
@@ -341,4 +395,9 @@
     </table>
     {% endif %}
 </section>
+
+</div><!-- /.desk-content -->
+</div><!-- /.desk-layout -->
+
+<script src="/static/desk.js"></script>
 {% endblock %}
