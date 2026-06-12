@@ -7,4 +7,9 @@
     <p class="article-summary">{{ s }}</p>
     {% endif %}
     <time>{{ article.formatted_published_at() }}</time>
+    {% if let Some(lslug) = article.list_slug.as_deref() %}
+    {% if let Some(lname) = article.list_name.as_deref() %}
+    <a class="card-list" href="/list/{{ lslug }}">{{ lname }}</a>
+    {% endif %}
+    {% endif %}
 </article>

@@ -1,0 +1,14 @@
+{% for article in articles %}
+{% include "partials/article_card.html" %}
+{% endfor %}
+
+{% if has_more %}
+<div class="load-more" hx-swap-oob="true" id="load-more-btn">
+    <button hx-get="/api/list/{{ list_slug }}/articles?page={{ page + 1 }}{% if let Some(cat) = active_category %}&amp;category={{ cat }}{% endif %}"
+            hx-target="#article-list"
+            hx-swap="beforeend"
+            class="btn">
+        Load more
+    </button>
+</div>
+{% endif %}

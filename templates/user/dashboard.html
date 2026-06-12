@@ -270,6 +270,13 @@
                             class="btn btn-sm btn-danger">
                         Reject
                     </button>
+                    <button hx-post="/api/user/article/{{ draft.id }}/delete"
+                            hx-target="closest tr"
+                            hx-swap="outerHTML"
+                            hx-confirm="Delete this article permanently? Its source articles will become eligible for regeneration."
+                            class="btn btn-sm btn-danger">
+                        Delete
+                    </button>
                 </td>
             </tr>
             {% endfor %}
@@ -319,6 +326,13 @@
                             hx-confirm="Unpublish this article? It will return to drafts."
                             class="btn btn-sm btn-danger">
                         Unpublish
+                    </button>
+                    <button hx-post="/api/user/article/{{ article.id }}/delete"
+                            hx-target="closest tr"
+                            hx-swap="outerHTML"
+                            hx-confirm="Delete this article permanently? Its source articles will become eligible for regeneration."
+                            class="btn btn-sm btn-danger">
+                        Delete
                     </button>
                 </td>
             </tr>

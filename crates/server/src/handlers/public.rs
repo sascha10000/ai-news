@@ -7,6 +7,7 @@ use serde::Deserialize;
 use crate::error::AppError;
 use crate::models::citation::{self, SentenceWithSources, SourceRef};
 use crate::models::generated_article::GeneratedArticle;
+use crate::models::list::List;
 use crate::models::session::{Identity, Session};
 use crate::models::user::{is_valid_username, User};
 
@@ -34,6 +35,18 @@ pub struct ArticleTemplate {
 #[template(path = "user_news.html")]
 pub struct UserNewsTemplate {
     pub username: String,
+    pub articles: Vec<GeneratedArticle>,
+    pub categories: Vec<String>,
+    pub active_category: Option<String>,
+    pub page: i64,
+    pub has_more: bool,
+}
+
+#[derive(Template, WebTemplate)]
+#[template(path = "list.html")]
+pub struct ListTemplate {
+    pub list_name: String,
+    pub list_slug: String,
     pub articles: Vec<GeneratedArticle>,
     pub categories: Vec<String>,
     pub active_category: Option<String>,
@@ -143,6 +156,44 @@ pub async fn user_news(
 
     Ok(UserNewsTemplate {
         username: user.username,
+        articles,
+        categories,
+        active_category: category.map(|s| s.to_string()),
+        page,
+        has_more,
+    })
+}
+
+pub async fn list_view(
+    State(state): State<AppState>,
+    Path(slug): Path<String>,
+    Query(params): Query<Pagination>,
+) -> Result<ListTemplate, AppError> {
+    let list = List::by_slug_global(&state.db, &slug)
+        .await?
+        .ok_or(AppError::NotFound)?;
+
+    let page = params.page.unwrap_or(1).max(1);
+    let per_page = 12;
+    let offset = (page - 1) * per_page;
+    let category = params.category.as_deref().filter(|c| !c.is_empty());
+
+    let articles = GeneratedArticle::published_for_list(
+        &state.db,
+        list.id,
+        per_page + 1,
+        offset,
+        category,
+    )
+    .await?;
+    let has_more = articles.len() as i64 > per_page;
+    let articles: Vec<_> = articles.into_iter().take(per_page as usize).collect();
+    let categories =
+        GeneratedArticle::published_categories_for_list(&state.db, list.id).await?;
+
+    Ok(ListTemplate {
+        list_name: list.name,
+        list_slug: list.slug,
         articles,
         categories,
         active_category: category.map(|s| s.to_string()),

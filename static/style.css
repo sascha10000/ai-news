@@ -181,6 +181,30 @@ main {
     font-size: 0.8rem;
 }
 
+.card-list {
+    display: inline-block;
+    margin-top: 0.25rem;
+    color: var(--muted);
+    font-size: 0.78rem;
+    text-decoration: none;
+    border-bottom: 1px dotted var(--muted);
+}
+.card-list:hover { color: var(--ink); border-bottom-color: var(--ink); }
+
+.list-header {
+    margin: 1rem 0 1.5rem;
+}
+.list-header h1 {
+    margin: 0.25rem 0 0;
+}
+.back-link {
+    display: inline-block;
+    color: var(--muted);
+    font-size: 0.85rem;
+    text-decoration: none;
+}
+.back-link:hover { color: var(--ink); }
+
 @media (max-width: 820px) {
     .article-grid { grid-template-columns: repeat(2, 1fr); }
 }

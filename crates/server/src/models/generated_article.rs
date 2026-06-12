@@ -13,6 +13,10 @@ pub struct GeneratedArticle {
     pub published_at: Option<String>,
     pub list_id: Option<i64>,
     pub user_id: Option<i64>,
+    #[sqlx(default)]
+    pub list_name: Option<String>,
+    #[sqlx(default)]
+    pub list_slug: Option<String>,
 }
 
 #[derive(sqlx::FromRow, Clone)]
@@ -77,7 +81,10 @@ impl GeneratedArticle {
         match category {
             Some(cat) => {
                 sqlx::query_as::<_, GeneratedArticle>(
-                    "SELECT * FROM generated_articles WHERE status = 'published' AND user_id IS NULL AND category = ? ORDER BY published_at DESC LIMIT ? OFFSET ?"
+                    "SELECT ga.*, l.name AS list_name, l.slug AS list_slug \
+                     FROM generated_articles ga LEFT JOIN lists l ON l.id = ga.list_id \
+                     WHERE ga.status = 'published' AND ga.user_id IS NULL AND ga.category = ? \
+                     ORDER BY ga.published_at DESC LIMIT ? OFFSET ?"
                 )
                 .bind(cat)
                 .bind(limit)
@@ -87,7 +94,10 @@ impl GeneratedArticle {
             }
             None => {
                 sqlx::query_as::<_, GeneratedArticle>(
-                    "SELECT * FROM generated_articles WHERE status = 'published' AND user_id IS NULL ORDER BY published_at DESC LIMIT ? OFFSET ?"
+                    "SELECT ga.*, l.name AS list_name, l.slug AS list_slug \
+                     FROM generated_articles ga LEFT JOIN lists l ON l.id = ga.list_id \
+                     WHERE ga.status = 'published' AND ga.user_id IS NULL \
+                     ORDER BY ga.published_at DESC LIMIT ? OFFSET ?"
                 )
                 .bind(limit)
                 .bind(offset)
@@ -103,6 +113,59 @@ impl GeneratedArticle {
         let rows: Vec<(String,)> = sqlx::query_as(
             "SELECT DISTINCT category FROM generated_articles WHERE status = 'published' AND user_id IS NULL AND category IS NOT NULL ORDER BY category"
         )
+        .fetch_all(pool)
+        .await?;
+        Ok(rows.into_iter().map(|r| r.0).collect())
+    }
+
+    pub async fn published_for_list(
+        pool: &SqlitePool,
+        list_id: i64,
+        limit: i64,
+        offset: i64,
+        category: Option<&str>,
+    ) -> Result<Vec<GeneratedArticle>, sqlx::Error> {
+        match category {
+            Some(cat) => {
+                sqlx::query_as::<_, GeneratedArticle>(
+                    "SELECT ga.*, l.name AS list_name, l.slug AS list_slug \
+                     FROM generated_articles ga LEFT JOIN lists l ON l.id = ga.list_id \
+                     WHERE ga.status = 'published' AND ga.user_id IS NULL AND ga.list_id = ? AND ga.category = ? \
+                     ORDER BY ga.published_at DESC LIMIT ? OFFSET ?"
+                )
+                .bind(list_id)
+                .bind(cat)
+                .bind(limit)
+                .bind(offset)
+                .fetch_all(pool)
+                .await
+            }
+            None => {
+                sqlx::query_as::<_, GeneratedArticle>(
+                    "SELECT ga.*, l.name AS list_name, l.slug AS list_slug \
+                     FROM generated_articles ga LEFT JOIN lists l ON l.id = ga.list_id \
+                     WHERE ga.status = 'published' AND ga.user_id IS NULL AND ga.list_id = ? \
+                     ORDER BY ga.published_at DESC LIMIT ? OFFSET ?"
+                )
+                .bind(list_id)
+                .bind(limit)
+                .bind(offset)
+                .fetch_all(pool)
+                .await
+            }
+        }
+    }
+
+    pub async fn published_categories_for_list(
+        pool: &SqlitePool,
+        list_id: i64,
+    ) -> Result<Vec<String>, sqlx::Error> {
+        let rows: Vec<(String,)> = sqlx::query_as(
+            "SELECT DISTINCT category FROM generated_articles \
+             WHERE status = 'published' AND user_id IS NULL AND list_id = ? AND category IS NOT NULL \
+             ORDER BY category"
+        )
+        .bind(list_id)
         .fetch_all(pool)
         .await?;
         Ok(rows.into_iter().map(|r| r.0).collect())
@@ -328,6 +391,28 @@ impl GeneratedArticle {
                 .execute(pool)
                 .await?
         };
+        Ok(result.rows_affected() > 0)
+    }
+
+    pub async fn delete_for_admin(pool: &SqlitePool, id: i64) -> Result<bool, sqlx::Error> {
+        let result = sqlx::query("DELETE FROM generated_articles WHERE id = ? AND user_id IS NULL")
+            .bind(id)
+            .execute(pool)
+            .await?;
+        Ok(result.rows_affected() > 0)
+    }
+
+    pub async fn delete_for_user(
+        pool: &SqlitePool,
+        id: i64,
+        user_id: i64,
+    ) -> Result<bool, sqlx::Error> {
+        let result =
+            sqlx::query("DELETE FROM generated_articles WHERE id = ? AND user_id = ?")
+                .bind(id)
+                .bind(user_id)
+                .execute(pool)
+                .await?;
         Ok(result.rows_affected() > 0)
     }
 

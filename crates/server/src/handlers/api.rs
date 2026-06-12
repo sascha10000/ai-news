@@ -24,6 +24,16 @@ pub struct ArticleListPartial {
     pub has_more: bool,
 }
 
+#[derive(Template, WebTemplate)]
+#[template(path = "partials/list_article_list.html")]
+pub struct ListArticleListPartial {
+    pub list_slug: String,
+    pub articles: Vec<GeneratedArticle>,
+    pub active_category: Option<String>,
+    pub page: i64,
+    pub has_more: bool,
+}
+
 pub async fn fetch_all_feeds(
     _auth: RequireAdmin,
     State(state): State<AppState>,
@@ -114,6 +124,40 @@ pub async fn article_list(
     })
 }
 
+pub async fn list_articles_page(
+    State(state): State<AppState>,
+    axum::extract::Path(slug): axum::extract::Path<String>,
+    Query(params): Query<Pagination>,
+) -> Result<ListArticleListPartial, AppError> {
+    let list = crate::models::list::List::by_slug_global(&state.db, &slug)
+        .await?
+        .ok_or(AppError::NotFound)?;
+
+    let page = params.page.unwrap_or(1).max(1);
+    let per_page = 12;
+    let offset = (page - 1) * per_page;
+    let category = params.category.as_deref().filter(|c| !c.is_empty());
+
+    let articles = GeneratedArticle::published_for_list(
+        &state.db,
+        list.id,
+        per_page + 1,
+        offset,
+        category,
+    )
+    .await?;
+    let has_more = articles.len() as i64 > per_page;
+    let articles: Vec<_> = articles.into_iter().take(per_page as usize).collect();
+
+    Ok(ListArticleListPartial {
+        list_slug: list.slug,
+        articles,
+        active_category: category.map(|s| s.to_string()),
+        page,
+        has_more,
+    })
+}
+
 #[derive(serde::Deserialize)]
 pub struct SetCategoryForm {
     pub category: String,
@@ -161,6 +205,18 @@ pub async fn reject_article(
         return Err(AppError::NotFound);
     }
     Ok(Html(r#"<span class="badge rejected">Rejected</span>"#.to_string()))
+}
+
+pub async fn delete_article(
+    _auth: RequireAdmin,
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+) -> Result<Html<String>, AppError> {
+    let deleted = GeneratedArticle::delete_for_admin(&state.db, id).await?;
+    if !deleted {
+        return Err(AppError::NotFound);
+    }
+    Ok(Html(String::new()))
 }
 
 pub async fn unpublish_article(

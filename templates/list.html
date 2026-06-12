@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block title %}{{ list_name }} &mdash; AI News{% endblock %}
+
+{% block content %}
+<header class="list-header">
+    <a href="/" class="back-link">&larr; All news</a>
+    <h1>{{ list_name }}</h1>
+</header>
+
+{% if !categories.is_empty() %}
+<nav class="category-bar">
+    <a href="/list/{{ list_slug }}" class="category-pill{% if active_category.is_none() %} active{% endif %}">All</a>
+    {% for cat in categories %}
+    <a href="/list/{{ list_slug }}?category={{ cat }}"
+       class="category-pill{% if active_category.as_deref() == Some(cat.as_str()) %} active{% endif %}">
+        {{ cat }}
+    </a>
+    {% endfor %}
+</nav>
+{% endif %}
+
+{% if articles.is_empty() %}
+<p class="empty">No published articles in this list yet.</p>
+{% else %}
+<div id="article-list" class="article-grid">
+    {% for article in articles %}
+    {% include "partials/article_card.html" %}
+    {% endfor %}
+
+    {% if has_more %}
+    <div class="load-more" id="load-more-btn">
+        <button hx-get="/api/list/{{ list_slug }}/articles?page={{ page + 1 }}{% if let Some(cat) = active_category %}&amp;category={{ cat }}{% endif %}"
+                hx-target="#article-list"
+                hx-swap="beforeend"
+                class="btn">
+            Load more
+        </button>
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+{% endblock %}

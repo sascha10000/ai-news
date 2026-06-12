@@ -399,6 +399,18 @@ pub async fn reject(
     Ok(Html(r#"<span class="badge rejected">Rejected</span>"#.to_string()))
 }
 
+pub async fn delete(
+    RequireUser(uid): RequireUser,
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+) -> Result<Html<String>, AppError> {
+    let deleted = GeneratedArticle::delete_for_user(&state.db, id, uid).await?;
+    if !deleted {
+        return Err(AppError::NotFound);
+    }
+    Ok(Html(String::new()))
+}
+
 #[derive(Deserialize)]
 pub struct BulkArticleIds {
     #[serde(default)]

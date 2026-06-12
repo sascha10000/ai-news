@@ -59,6 +59,13 @@ impl List {
             .await
     }
 
+    pub async fn by_slug_global(pool: &SqlitePool, slug: &str) -> Result<Option<List>, sqlx::Error> {
+        sqlx::query_as::<_, List>("SELECT * FROM lists WHERE slug = ? AND user_id IS NULL")
+            .bind(slug)
+            .fetch_optional(pool)
+            .await
+    }
+
     pub async fn owner_of(pool: &SqlitePool, id: i64) -> Result<Option<i64>, sqlx::Error> {
         let row: Option<(Option<i64>,)> = sqlx::query_as("SELECT user_id FROM lists WHERE id = ?")
             .bind(id)

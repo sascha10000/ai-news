@@ -87,6 +87,8 @@ async fn main() {
         .route("/", get(handlers::public::index))
         .route("/article/{slug}", get(handlers::public::article))
         .route("/user-news/{username}", get(handlers::public::user_news))
+        .route("/list/{slug}", get(handlers::public::list_view))
+        .route("/api/list/{slug}/articles", get(handlers::api::list_articles_page))
         // Auth routes
         .route("/login", get(handlers::auth::login_page))
         .route("/login", post(handlers::auth::login))
@@ -117,6 +119,7 @@ async fn main() {
         .route("/api/user/article/{id}/publish", post(handlers::user::publish))
         .route("/api/user/article/{id}/unpublish", post(handlers::user::unpublish))
         .route("/api/user/article/{id}/reject", post(handlers::user::reject))
+        .route("/api/user/article/{id}/delete", post(handlers::user::delete))
         .route("/api/user/articles/bulk-publish", post(handlers::user::bulk_publish))
         .route("/api/user/articles/bulk-unpublish", post(handlers::user::bulk_unpublish))
         // Admin routes (protected)
@@ -142,6 +145,7 @@ async fn main() {
         .route("/api/article/{id}/publish", post(handlers::api::publish_article))
         .route("/api/article/{id}/unpublish", post(handlers::api::unpublish_article))
         .route("/api/article/{id}/reject", post(handlers::api::reject_article))
+        .route("/api/article/{id}/delete", post(handlers::api::delete_article))
         // Token-protected remote-control API
         .route("/api/sources/pending", get(handlers::remote::pending_sources))
         .route("/api/lists", get(handlers::remote::lists))
