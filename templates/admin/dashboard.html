@@ -1,14 +1,27 @@
 {% extends "base.html" %}
 
-{% block title %}Admin - AI News{% endblock %}
+{% block title %}The Editor's Desk &mdash; AI News{% endblock %}
+
+{% block tagline %}{% endblock %}
 
 {% block content %}
-<div class="admin-header">
-    <h1>Admin Dashboard</h1>
-    <form action="/admin/logout" method="post">
-        <button type="submit" class="btn btn-sm">Logout</button>
+<header class="desk-masthead">
+    <h1>The Editor&rsquo;s Desk</h1>
+    <div class="desk-meta">
+        <span id="desk-date">Edition &mdash; today</span>
+        <span class="sep">·</span>
+        <span class="count"><em>{{ drafts.len() }}</em>drafts queued</span>
+        <span class="sep">·</span>
+        <span class="count"><em>{{ published.len() }}</em>published</span>
+        <span class="sep">·</span>
+        <span class="count"><em>{{ lists.len() }}</em>lists</span>
+        <span class="sep">·</span>
+        <span class="count"><em>{{ feeds.len() }}</em>feeds</span>
+    </div>
+    <form action="/admin/logout" method="post" class="logout">
+        <button type="submit">Sign off</button>
     </form>
-</div>
+</header>
 
 <datalist id="known-categories">
     {% for cat in categories %}
@@ -16,8 +29,45 @@
     {% endfor %}
 </datalist>
 
-<section class="admin-section">
-    <h2>Actions</h2>
+<div class="desk-layout">
+<nav class="desk-toc" aria-label="Sections">
+    <p class="toc-label">§ Contents</p>
+    <a href="#sec-operations">
+        <span class="toc-num">I</span>
+        <span class="toc-name">Operations</span>
+        <span class="toc-leader"></span>
+        <span class="toc-count">&mdash;</span>
+    </a>
+    <a href="#sec-clusters">
+        <span class="toc-num">II</span>
+        <span class="toc-name">Lists</span>
+        <span class="toc-leader"></span>
+        <span class="toc-count">{{ lists.len() }}</span>
+    </a>
+    <a href="#sec-wire">
+        <span class="toc-num">III</span>
+        <span class="toc-name">Feeds</span>
+        <span class="toc-leader"></span>
+        <span class="toc-count">{{ feeds.len() }}</span>
+    </a>
+    <a href="#sec-drafts">
+        <span class="toc-num">IV</span>
+        <span class="toc-name">Unpublished</span>
+        <span class="toc-leader"></span>
+        <span class="toc-count">{{ drafts.len() }}</span>
+    </a>
+    <a href="#sec-published">
+        <span class="toc-num">V</span>
+        <span class="toc-name">Published</span>
+        <span class="toc-leader"></span>
+        <span class="toc-count">{{ published.len() }}</span>
+    </a>
+</nav>
+
+<div class="desk-content">
+
+<section class="desk-section" id="sec-operations">
+    <h2>Operations <span class="eyebrow">the wire room</span></h2>
     <div class="actions">
         <button hx-post="/api/fetch-all"
                 hx-target="#fetch-result"
@@ -52,8 +102,8 @@
     {% endif %}
 </section>
 
-<section class="admin-section">
-    <h2>Lists</h2>
+<section class="desk-section" id="sec-clusters">
+    <h2>Clusters <span class="eyebrow">lists &amp; assignments</span></h2>
     <p class="hint">Lists let you manually pre-cluster feeds. Generation can run per-list so the LLM only sees feeds you grouped together.</p>
 
     <form action="/admin/lists" method="post" class="add-feed-form">
@@ -105,8 +155,8 @@
     {% endif %}
 </section>
 
-<section class="admin-section">
-    <h2>RSS Feeds</h2>
+<section class="desk-section" id="sec-wire">
+    <h2>Wire <span class="eyebrow">RSS feeds &amp; sources</span></h2>
     <form action="/admin/feeds" method="post" class="add-feed-form">
         <input type="text" name="name" placeholder="Feed name" required>
         <input type="url" name="url" placeholder="https://example.com/rss" required>
@@ -211,10 +261,8 @@
     </table>
 </section>
 
-<section class="admin-section">
-    <div class="section-header">
-        <h2>Draft Articles</h2>
-    </div>
+<section class="desk-section" id="sec-drafts">
+    <h2>Copy desk <span class="eyebrow">drafts awaiting decision</span></h2>
     <div id="publish-all-result"></div>
     {% if drafts.is_empty() %}
     <p class="empty">No drafts. Generate some articles first.</p>
@@ -294,10 +342,8 @@
     {% endif %}
 </section>
 
-<section class="admin-section">
-    <div class="section-header">
-        <h2>Published Articles</h2>
-    </div>
+<section class="desk-section" id="sec-published">
+    <h2>On press <span class="eyebrow">live edition</span></h2>
     <div id="bulk-unpublish-result"></div>
     {% if published.is_empty() %}
     <p class="empty">No published articles yet.</p>
@@ -356,4 +402,57 @@
     </table>
     {% endif %}
 </section>
+
+</div><!-- /.desk-content -->
+</div><!-- /.desk-layout -->
+
+<script>
+(function () {
+    // Date stamp in the masthead
+    var el = document.getElementById('desk-date');
+    if (el) {
+        var now = new Date();
+        var weekday = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][now.getDay()];
+        var month = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][now.getMonth()];
+        el.textContent = weekday + ', ' + month + ' ' + now.getDate() + ', ' + now.getFullYear();
+    }
+
+    // Contents-index tab routing — show one section at a time, sync URL hash
+    var toc = document.querySelector('.desk-toc');
+    var sections = document.querySelectorAll('.desk-content > .desk-section');
+    if (!toc || !sections.length) return;
+
+    function activate(id) {
+        var found = false;
+        sections.forEach(function (s) {
+            var on = s.id === id;
+            s.classList.toggle('is-active', on);
+            if (on) found = true;
+        });
+        toc.querySelectorAll('a').forEach(function (a) {
+            a.classList.toggle('is-active', a.getAttribute('href') === '#' + id);
+        });
+        return found;
+    }
+
+    function fromHash() {
+        var h = (window.location.hash || '').replace('#', '');
+        if (!h || !activate(h)) activate(sections[0].id);
+    }
+
+    toc.addEventListener('click', function (e) {
+        var a = e.target.closest('a');
+        if (!a) return;
+        var id = (a.getAttribute('href') || '').replace('#', '');
+        if (!id) return;
+        e.preventDefault();
+        history.replaceState(null, '', '#' + id);
+        activate(id);
+        window.scrollTo(0, 0);
+    });
+
+    window.addEventListener('hashchange', fromHash);
+    fromHash();
+})();
+</script>
 {% endblock %}
