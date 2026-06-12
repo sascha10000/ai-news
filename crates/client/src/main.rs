@@ -6,6 +6,7 @@ use ai_news_core::{
     ListsResponse, PendingSourcesResponse, UserSummary, UsersResponse,
 };
 use ai_news_generation::{check_model_available, generate_drafts_for_list, OllamaConfig};
+use clap::{ArgGroup, Parser};
 
 enum Mode {
     Unscoped,
@@ -13,7 +14,6 @@ enum Mode {
     AllLists,
     ShowLists,
     UserNews(Option<String>),
-    Help,
 }
 
 #[derive(Clone, Copy)]
@@ -23,64 +23,53 @@ enum Scope {
     User(i64),
 }
 
-fn parse_mode() -> anyhow::Result<Mode> {
-    let args: Vec<String> = env::args().collect();
-    if args.iter().any(|a| a == "--help" || a == "-h") {
-        return Ok(Mode::Help);
-    }
-    if args.iter().any(|a| a == "--show-lists") {
-        return Ok(Mode::ShowLists);
-    }
-    if args.iter().any(|a| a == "--all-lists") {
-        return Ok(Mode::AllLists);
-    }
-    if let Some(pos) = args.iter().position(|a| a == "--list") {
-        let id: i64 = args
-            .get(pos + 1)
-            .ok_or_else(|| anyhow::anyhow!("--list requires a list id"))?
-            .parse()
-            .map_err(|_| anyhow::anyhow!("--list requires a numeric list id"))?;
-        return Ok(Mode::List(id));
-    }
-    if let Some(pos) = args.iter().position(|a| a == "--generate-user-news") {
-        let username = args
-            .get(pos + 1)
-            .filter(|s| !s.starts_with("--"))
-            .map(|s| s.clone());
-        return Ok(Mode::UserNews(username));
-    }
-    Ok(Mode::Unscoped)
+/// Generate articles from pending source feeds via Ollama.
+///
+/// With no flags: generate from pending sources in global feeds only.
+///
+/// Required env vars: SERVER_URL, API_TOKEN.
+/// Optional: OLLAMA_HOST (default http://localhost:11434), OLLAMA_MODEL (default llama3.2:latest).
+#[derive(Parser, Debug)]
+#[command(name = "client", version, about, long_about = None)]
+#[command(group(ArgGroup::new("mode").required(false).multiple(false)))]
+struct Cli {
+    /// Generate articles only for the given list ID.
+    #[arg(long, value_name = "ID", group = "mode")]
+    list: Option<i64>,
+
+    /// Run a generation pass for every configured list.
+    #[arg(long, group = "mode")]
+    all_lists: bool,
+
+    /// Print all configured lists with their IDs (no generation).
+    #[arg(long, group = "mode")]
+    show_lists: bool,
+
+    /// For each user (or just USERNAME): sweep each of their lists, then run a
+    /// per-user catch-all over all of their feeds. Omit USERNAME to process every user.
+    #[arg(
+        long = "generate-user-news",
+        value_name = "USERNAME",
+        num_args = 0..=1,
+        group = "mode",
+    )]
+    generate_user_news: Option<Option<String>>,
 }
 
-fn print_help() {
-    println!(
-        "ai-news-client — generate articles from pending source feeds via Ollama.
-
-USAGE:
-    client [MODE]
-
-MODES:
-    (no flags)                       Generate articles from pending sources in global feeds only.
-    --list <ID>                      Generate articles only for the given list ID.
-    --all-lists                      Run a generation pass for every configured list.
-    --show-lists                     Print all configured lists with their IDs (no generation).
-    --generate-user-news [USERNAME]  For each user (or just USERNAME): sweep each of their lists,
-                                     then run a per-user catch-all over all of their feeds.
-    --help, -h                       Show this help.
-
-ENVIRONMENT:
-    SERVER_URL          Required. Base URL of the ai-news server (e.g. http://localhost:3000).
-    API_TOKEN           Required. Token for /api/* token-protected routes.
-    OLLAMA_HOST         Optional. Default: http://localhost:11434
-    OLLAMA_MODEL        Optional. Default: llama3.2:latest
-
-EXAMPLES:
-    client --show-lists
-    client --list 3
-    client --all-lists
-    client --generate-user-news
-    client --generate-user-news alice"
-    );
+impl Cli {
+    fn into_mode(self) -> Mode {
+        if self.show_lists {
+            Mode::ShowLists
+        } else if self.all_lists {
+            Mode::AllLists
+        } else if let Some(id) = self.list {
+            Mode::List(id)
+        } else if let Some(filter) = self.generate_user_news {
+            Mode::UserNews(filter)
+        } else {
+            Mode::Unscoped
+        }
+    }
 }
 
 #[tokio::main]
@@ -88,12 +77,7 @@ async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
     dotenvy::dotenv().ok();
 
-    let mode = parse_mode()?;
-
-    if let Mode::Help = mode {
-        print_help();
-        return Ok(());
-    }
+    let mode = Cli::parse().into_mode();
 
     let server_url = env::var("SERVER_URL")
         .map_err(|_| anyhow::anyhow!("SERVER_URL must be set (e.g. http://localhost:3000)"))?;
@@ -119,7 +103,7 @@ async fn main() -> anyhow::Result<()> {
     check_model_available(&ollama_cfg).await?;
 
     match mode {
-        Mode::Help | Mode::ShowLists => unreachable!(),
+        Mode::ShowLists => unreachable!(),
         Mode::Unscoped => {
             let summary = run_one(&http, &server_url, &api_token, &ollama_cfg, Scope::Unscoped, "unscoped").await?;
             print_summary(&[summary]);
