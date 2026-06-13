@@ -1,6 +1,8 @@
 use askama::Template;
 use askama_web::WebTemplate;
 use axum::extract::{Path, Query, State};
+use axum::http::StatusCode;
+use axum::response::{IntoResponse, Response};
 use axum_extra::extract::cookie::CookieJar;
 use serde::Deserialize;
 
@@ -29,6 +31,12 @@ pub struct ArticleTemplate {
     pub article: GeneratedArticle,
     pub sentences: Vec<SentenceWithSources>,
     pub all_sources: Vec<SourceRef>,
+}
+
+#[derive(Template, WebTemplate)]
+#[template(path = "private_page.html")]
+pub struct PrivatePageTemplate {
+    pub username: String,
 }
 
 #[derive(Template, WebTemplate)]
@@ -114,7 +122,7 @@ pub async fn user_news(
     jar: CookieJar,
     Path(username_with_at): Path<String>,
     Query(params): Query<Pagination>,
-) -> Result<UserNewsTemplate, AppError> {
+) -> Result<Response, AppError> {
     let username = username_with_at
         .strip_prefix('@')
         .unwrap_or(&username_with_at)
@@ -137,7 +145,12 @@ pub async fn user_news(
             None => false,
         };
         if !allowed {
-            return Err(AppError::NotFound);
+            // Reveals that the username exists, but the listing stays hidden.
+            // Friendlier than a bare 404 for owners who simply aren't logged in.
+            let page = PrivatePageTemplate {
+                username: user.username,
+            };
+            return Ok((StatusCode::FORBIDDEN, page).into_response());
         }
     }
 
@@ -161,7 +174,8 @@ pub async fn user_news(
         active_category: category.map(|s| s.to_string()),
         page,
         has_more,
-    })
+    }
+    .into_response())
 }
 
 pub async fn list_view(

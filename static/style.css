@@ -380,6 +380,50 @@ main {
 }
 
 /* ============================================================
+   PRIVATE EDITION — redacted-headline notice
+   ============================================================ */
+
+.private-page {
+    max-width: var(--measure);
+    margin: 0 auto;
+    padding: clamp(2.5rem, 10vh, 6rem) 0 3rem;
+}
+
+/* The single allowed flourish: the withheld headline */
+.private-redaction {
+    margin-bottom: 2rem;
+}
+.private-redaction span {
+    display: block;
+    height: clamp(1.7rem, 3vw, 2.3rem);
+    background: var(--ink);
+}
+.private-redaction span:first-child { width: 86%; }
+.private-redaction span:last-child  { width: 58%; margin-top: 0.55rem; }
+
+.private-page h1 {
+    font-size: clamp(1.7rem, 3.2vw, 2.3rem);
+    line-height: 1.08;
+    font-variation-settings: "opsz" 144;
+    margin-bottom: 0.85rem;
+}
+
+.private-note {
+    max-width: 48ch;
+    font-size: 1.05rem;
+    text-wrap: pretty;
+}
+.private-note a {
+    color: var(--accent);
+    text-decoration: none;
+    border-bottom: 1px solid currentColor;
+    transition: color 120ms ease;
+}
+.private-note a:hover { color: var(--ink); }
+
+.private-page .back-link { margin: 2.5rem 0 0; }
+
+/* ============================================================
    FOOTER — single quiet line
    ============================================================ */
 

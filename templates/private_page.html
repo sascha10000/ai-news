@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+
+{% block title %}Private edition — AI News{% endblock %}
+
+{% block content %}
+<section class="private-page">
+    <div class="private-redaction" aria-hidden="true">
+        <span></span>
+        <span></span>
+    </div>
+    <h1>This edition is private.</h1>
+    <p class="private-note">
+        <strong>@{{ username }}</strong> publishes off the record &mdash; their articles
+        aren&rsquo;t publicly listed. If this is your page,
+        <a href="/login">log in</a> to read it.
+    </p>
+    <a class="back-link" href="/">&larr; Back to the front page</a>
+</section>
+{% endblock %}
