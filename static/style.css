@@ -444,6 +444,62 @@ footer {
     text-align: center;
 }
 
+.footer-tagline {
+    margin: 0;
+}
+
+.footer-links {
+    margin-top: 0.5rem;
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+}
+
+.footer-links a {
+    color: var(--muted);
+    text-decoration: none;
+}
+
+.footer-links a:hover {
+    text-decoration: underline;
+}
+
+.legal {
+    max-width: 42rem;
+    margin: 2rem auto;
+    line-height: 1.6;
+}
+
+.legal h1 {
+    margin-bottom: 1.5rem;
+}
+
+.legal h1 + section,
+.legal section + section {
+    margin-top: 1.75rem;
+}
+
+.legal h2 {
+    font-size: 1.1rem;
+    margin-bottom: 0.5rem;
+}
+
+.legal ul {
+    margin: 0.5rem 0 0.5rem 1.25rem;
+}
+
+.legal hr {
+    border: 0;
+    border-top: 1px solid var(--rule);
+    margin: 3rem 0 1.5rem;
+}
+
+.legal .lang-note {
+    color: var(--muted);
+    font-size: 0.9rem;
+    margin-bottom: 1.5rem;
+}
+
 /* ============================================================
    ADMIN — preserved, retoned to the system
    ============================================================ */

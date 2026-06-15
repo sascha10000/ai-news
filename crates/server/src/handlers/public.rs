@@ -49,6 +49,14 @@ pub struct PrivatePageTemplate {
 pub struct WhyAccountTemplate;
 
 #[derive(Template, WebTemplate)]
+#[template(path = "impressum.html")]
+pub struct ImpressumTemplate;
+
+#[derive(Template, WebTemplate)]
+#[template(path = "datenschutz.html")]
+pub struct DatenschutzTemplate;
+
+#[derive(Template, WebTemplate)]
 #[template(path = "user_news.html")]
 pub struct UserNewsTemplate {
     pub username: String,
@@ -249,4 +257,12 @@ pub async fn list_view(
 
 pub async fn why_account() -> WhyAccountTemplate {
     WhyAccountTemplate
+}
+
+pub async fn impressum() -> ImpressumTemplate {
+    ImpressumTemplate
+}
+
+pub async fn datenschutz() -> DatenschutzTemplate {
+    DatenschutzTemplate
 }
