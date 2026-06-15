@@ -1,6 +1,6 @@
 use askama::Template;
 use askama_web::WebTemplate;
-use axum::extract::{Path, State};
+use axum::extract::{Multipart, Path, State};
 use axum::http::{HeaderMap, HeaderValue};
 use axum::response::{Html, IntoResponse, Redirect, Response};
 use axum::Form;
@@ -11,13 +11,15 @@ use time::Duration;
 
 use crate::error::AppError;
 use crate::handlers::admin::{FeedWithLists, ImportErrorsTemplate};
+use crate::models::article_interaction::ArticleInteraction;
 use crate::models::feed::{CreateFeed, Feed};
 use crate::models::generated_article::GeneratedArticle;
 use crate::models::list::{CreateList, List};
 use crate::models::session::{Identity, Session};
 use crate::models::source_article::SourceArticle;
 use crate::models::user::{User, UserError};
-use crate::services::{feed_fetcher, feed_import};
+use crate::services::feed_opml::ImportError;
+use crate::services::{feed_fetcher, feed_import, feed_opml};
 
 use super::auth::RequireUser;
 use super::super::AppState;
@@ -37,6 +39,8 @@ pub struct UserDashboardTemplate {
     pub lists: Vec<List>,
     pub drafts: Vec<GeneratedArticle>,
     pub published: Vec<GeneratedArticle>,
+    pub liked: Vec<GeneratedArticle>,
+    pub read_later: Vec<GeneratedArticle>,
     pub categories: Vec<String>,
     pub server_llm_enabled: bool,
 }
@@ -155,6 +159,8 @@ pub async fn dashboard(
 
     let drafts = GeneratedArticle::drafts_for_user(&state.db, uid).await?;
     let published = GeneratedArticle::all_published_for_user(&state.db, uid).await?;
+    let liked = ArticleInteraction::liked_for_user(&state.db, uid).await?;
+    let read_later = ArticleInteraction::read_later_for_user(&state.db, uid).await?;
     let categories = GeneratedArticle::all_categories(&state.db).await?;
 
     Ok(UserDashboardTemplate {
@@ -163,6 +169,8 @@ pub async fn dashboard(
         lists,
         drafts,
         published,
+        liked,
+        read_later,
         categories,
         server_llm_enabled: SERVER_LLM_ENABLED,
     })
@@ -234,6 +242,82 @@ pub async fn import_feeds(
             for feed in &parsed {
                 let feed_id = Feed::create(&state.db, &feed.name, &feed.url, Some(uid)).await?;
                 for list_id in &input.list_ids {
+                    List::add_feed_for_user(&state.db, *list_id, feed_id, uid).await?;
+                }
+            }
+            Ok(Redirect::to("/user").into_response())
+        }
+    }
+}
+
+#[derive(Template, WebTemplate)]
+#[template(path = "opml_import_errors.html")]
+pub struct OpmlImportErrorsTemplate {
+    pub errors: Vec<ImportError>,
+    pub lists: Vec<List>,
+}
+
+/// Cap uploaded OPML size at 2 MiB. Real exports from Feedly/Reeder/NewsBlur
+/// are well under this; the cap is a memory-abuse guard.
+const OPML_MAX_BYTES: usize = 2 * 1024 * 1024;
+
+pub async fn import_opml(
+    RequireUser(uid): RequireUser,
+    State(state): State<AppState>,
+    mut multipart: Multipart,
+) -> Result<Response, AppError> {
+    let mut xml: Option<String> = None;
+    let mut list_ids: Vec<i64> = Vec::new();
+
+    while let Some(field) = multipart
+        .next_field()
+        .await
+        .map_err(|e| AppError::BadRequest(format!("upload failed: {e}")))?
+    {
+        match field.name().unwrap_or("") {
+            "file" => {
+                let bytes = field
+                    .bytes()
+                    .await
+                    .map_err(|e| AppError::BadRequest(format!("could not read file: {e}")))?;
+                if bytes.len() > OPML_MAX_BYTES {
+                    return Err(AppError::BadRequest(format!(
+                        "OPML file too large ({} bytes, max {})",
+                        bytes.len(),
+                        OPML_MAX_BYTES
+                    )));
+                }
+                let text = std::str::from_utf8(&bytes)
+                    .map_err(|_| AppError::BadRequest("OPML file is not valid UTF-8".to_string()))?
+                    .to_string();
+                xml = Some(text);
+            }
+            "list_ids" => {
+                let s = field.text().await.unwrap_or_default();
+                if let Ok(id) = s.parse::<i64>() {
+                    list_ids.push(id);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    let xml = xml.ok_or_else(|| AppError::BadRequest("no OPML file provided".to_string()))?;
+
+    match feed_opml::parse_opml(&xml) {
+        Err(errors) => {
+            let lists = List::all_for_user(&state.db, uid).await?;
+            Ok(OpmlImportErrorsTemplate { errors, lists }.into_response())
+        }
+        Ok(parsed) => {
+            for feed in &parsed.feeds {
+                let feed_id = Feed::create(&state.db, &feed.name, &feed.url, Some(uid)).await?;
+                if let Some(cat) = &feed.category {
+                    let list_id =
+                        List::find_or_create_for_user(&state.db, cat, uid).await?;
+                    List::add_feed_for_user(&state.db, list_id, feed_id, uid).await?;
+                }
+                for list_id in &list_ids {
                     List::add_feed_for_user(&state.db, *list_id, feed_id, uid).await?;
                 }
             }
@@ -440,6 +524,72 @@ fn refresh_response(msg: String) -> (HeaderMap, Html<String>) {
     let mut headers = HeaderMap::new();
     headers.insert("HX-Refresh", HeaderValue::from_static("true"));
     (headers, Html(format!(r#"<div class="success">{msg}</div>"#)))
+}
+
+// ---------- likes & read-later ----------
+
+pub async fn like_article(
+    RequireUser(uid): RequireUser,
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+) -> Result<Html<String>, AppError> {
+    ArticleInteraction::like(&state.db, uid, id).await?;
+    Ok(Html(render_like_button(id, true)))
+}
+
+pub async fn unlike_article(
+    RequireUser(uid): RequireUser,
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+) -> Result<Html<String>, AppError> {
+    ArticleInteraction::unlike(&state.db, uid, id).await?;
+    Ok(Html(render_like_button(id, false)))
+}
+
+pub async fn mark_read_later(
+    RequireUser(uid): RequireUser,
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+) -> Result<Html<String>, AppError> {
+    ArticleInteraction::mark_read_later(&state.db, uid, id).await?;
+    Ok(Html(render_read_later_button(id, true)))
+}
+
+pub async fn unmark_read_later(
+    RequireUser(uid): RequireUser,
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+) -> Result<Html<String>, AppError> {
+    ArticleInteraction::unmark_read_later(&state.db, uid, id).await?;
+    Ok(Html(render_read_later_button(id, false)))
+}
+
+pub fn render_like_button(article_id: i64, liked: bool) -> String {
+    if liked {
+        format!(
+            r##"<button id="like-btn-{id}" hx-post="/api/user/article/{id}/unlike" hx-target="#like-btn-{id}" hx-swap="outerHTML" class="btn btn-sm btn-success" title="You liked this">&#9829; Liked</button>"##,
+            id = article_id
+        )
+    } else {
+        format!(
+            r##"<button id="like-btn-{id}" hx-post="/api/user/article/{id}/like" hx-target="#like-btn-{id}" hx-swap="outerHTML" class="btn btn-sm" title="Like this article">&#9825; Like</button>"##,
+            id = article_id
+        )
+    }
+}
+
+pub fn render_read_later_button(article_id: i64, saved: bool) -> String {
+    if saved {
+        format!(
+            r##"<button id="rl-btn-{id}" hx-post="/api/user/article/{id}/unread-later" hx-target="#rl-btn-{id}" hx-swap="outerHTML" class="btn btn-sm btn-success" title="Saved for later">&#9733; Saved</button>"##,
+            id = article_id
+        )
+    } else {
+        format!(
+            r##"<button id="rl-btn-{id}" hx-post="/api/user/article/{id}/read-later" hx-target="#rl-btn-{id}" hx-swap="outerHTML" class="btn btn-sm" title="Save to read later">&#9734; Read later</button>"##,
+            id = article_id
+        )
+    }
 }
 
 // ---------- generation (server-llm gated) ----------

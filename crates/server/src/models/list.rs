@@ -89,6 +89,25 @@ impl List {
         Ok(result.last_insert_rowid())
     }
 
+    pub async fn find_or_create_for_user(
+        pool: &SqlitePool,
+        name: &str,
+        user_id: i64,
+    ) -> Result<i64, sqlx::Error> {
+        if let Some(id) = sqlx::query_scalar::<_, i64>(
+            "SELECT id FROM lists WHERE user_id = ? AND name = ?",
+        )
+        .bind(user_id)
+        .bind(name)
+        .fetch_optional(pool)
+        .await?
+        {
+            return Ok(id);
+        }
+        let slug = slug::slugify(name);
+        Self::create(pool, name, &slug, Some(user_id)).await
+    }
+
     pub async fn delete(pool: &SqlitePool, id: i64) -> Result<(), sqlx::Error> {
         sqlx::query("DELETE FROM lists WHERE id = ? AND user_id IS NULL")
             .bind(id)

@@ -10,7 +10,7 @@ server-llm = ["dep:ai-news-generation"]
 [dependencies]
 ai-news-core = { path = "../core" }
 ai-news-generation = { path = "../generation", optional = true }
-axum = { version = "0.8", features = ["macros"] }
+axum = { version = "0.8", features = ["macros", "multipart"] }
 askama = "0.15"
 askama_web = { version = "0.15", features = ["axum-0.8"] }
 tokio = { version = "1", features = ["full"] }
@@ -19,6 +19,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 reqwest = { version = "0.12", features = ["json"] }
 feed-rs = "2"
+quick-xml = { version = "0.36", features = ["serialize"] }
 tokio-cron-scheduler = "0.13"
 chrono = { version = "0.4", features = ["serde"] }
 tower-http = { version = "0.6", features = ["fs", "cors"] }

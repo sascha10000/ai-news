@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+
+{% block title %}Why an account? &mdash; AI News{% endblock %}
+
+{% block tagline %}{% endblock %}
+
+{% block content %}
+<article class="pitch">
+    <h1>Why an account?</h1>
+    <p class="dek">Read here without one. With one, you build your own.</p>
+
+    <p class="lead">
+        AI News is free to read without signing in &mdash; every story on the front
+        page is yours to browse, and every sentence the model writes still cites the
+        source it came from. An account turns the same model into a tool you can
+        point at the feeds you care about, instead of the default broadsheet.
+    </p>
+
+    <section class="benefit">
+        <h2><span class="benefit-no">01.</span> Your feed, your sources</h2>
+        <p>
+            Add the RSS sources you actually read. Group them into lists. The model
+            only summarizes what&rsquo;s inside &mdash; nothing else creeps in.
+        </p>
+    </section>
+
+    <section class="benefit">
+        <h2><span class="benefit-no">02.</span> A byline of your own</h2>
+        <p>
+            Publish your curated edition at <code>/user-news/@you</code>. Share the
+            URL with anyone, or keep it private to yourself. Either way, every
+            summary still links to the source feed it came from.
+        </p>
+    </section>
+
+    <section class="benefit">
+        <h2><span class="benefit-no">03.</span> Mark what matters</h2>
+        <p>
+            Like articles you&rsquo;d recommend. Save articles for later. Build a
+            small archive of the pieces worth keeping &mdash; without leaving the
+            page you&rsquo;re reading.
+        </p>
+    </section>
+
+    <section class="benefit">
+        <h2><span class="benefit-no">04.</span> Sourced, never guessed</h2>
+        <p>
+            Same rule as the public side: every sentence the model writes is anchored
+            to a source citation. No invented quotes, no hidden attribution. An
+            account doesn&rsquo;t change that &mdash; it just puts you on the
+            editor&rsquo;s side of the page.
+        </p>
+    </section>
+
+    <div class="cta">
+        <a href="/register" class="btn btn-primary">Create your account</a>
+        <p class="signin">Already have one? <a href="/login">Log in</a>.</p>
+    </div>
+</article>
+{% endblock %}

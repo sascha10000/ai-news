@@ -7,6 +7,7 @@ use axum_extra::extract::cookie::CookieJar;
 use serde::Deserialize;
 
 use crate::error::AppError;
+use crate::models::article_interaction::ArticleInteraction;
 use crate::models::citation::{self, SentenceWithSources, SourceRef};
 use crate::models::generated_article::GeneratedArticle;
 use crate::models::list::List;
@@ -31,6 +32,10 @@ pub struct ArticleTemplate {
     pub article: GeneratedArticle,
     pub sentences: Vec<SentenceWithSources>,
     pub all_sources: Vec<SourceRef>,
+    pub like_count: i64,
+    pub viewer_user_id: Option<i64>,
+    pub viewer_liked: bool,
+    pub viewer_read_later: bool,
 }
 
 #[derive(Template, WebTemplate)]
@@ -38,6 +43,10 @@ pub struct ArticleTemplate {
 pub struct PrivatePageTemplate {
     pub username: String,
 }
+
+#[derive(Template, WebTemplate)]
+#[template(path = "why_account.html")]
+pub struct WhyAccountTemplate;
 
 #[derive(Template, WebTemplate)]
 #[template(path = "user_news.html")]
@@ -94,6 +103,7 @@ pub async fn index(
 
 pub async fn article(
     State(state): State<AppState>,
+    jar: CookieJar,
     Path(slug): Path<String>,
 ) -> Result<ArticleTemplate, AppError> {
     let article = GeneratedArticle::by_slug(&state.db, &slug)
@@ -109,11 +119,32 @@ pub async fn article(
 
     let sentences = citation::sentences_with_sources(&state.db, article.id).await?;
     let all_sources = citation::all_sources_for_article(&state.db, article.id).await?;
+    let like_count = ArticleInteraction::like_count(&state.db, article.id).await?;
+
+    let viewer_user_id = match jar.get("session") {
+        Some(cookie) => match Session::validate(&state.db, cookie.value()).await? {
+            Some(Identity::User(uid)) => Some(uid),
+            _ => None,
+        },
+        None => None,
+    };
+
+    let (viewer_liked, viewer_read_later) = match viewer_user_id {
+        Some(uid) => (
+            ArticleInteraction::is_liked(&state.db, uid, article.id).await?,
+            ArticleInteraction::is_read_later(&state.db, uid, article.id).await?,
+        ),
+        None => (false, false),
+    };
 
     Ok(ArticleTemplate {
         article,
         sentences,
         all_sources,
+        like_count,
+        viewer_user_id,
+        viewer_liked,
+        viewer_read_later,
     })
 }
 
@@ -214,4 +245,8 @@ pub async fn list_view(
         page,
         has_more,
     })
+}
+
+pub async fn why_account() -> WhyAccountTemplate {
+    WhyAccountTemplate
 }

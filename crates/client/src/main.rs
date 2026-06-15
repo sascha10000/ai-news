@@ -14,6 +14,7 @@ enum Mode {
     AllLists,
     ShowLists,
     UserNews(Option<String>),
+    All,
 }
 
 #[derive(Clone, Copy)]
@@ -54,12 +55,20 @@ struct Cli {
         group = "mode",
     )]
     generate_user_news: Option<Option<String>>,
+
+    /// Run every generation pass sequentially: unscoped, then every list, then
+    /// every user. Equivalent to running `client`, `client --all-lists` and
+    /// `client --generate-user-news` back-to-back.
+    #[arg(long, group = "mode")]
+    all: bool,
 }
 
 impl Cli {
     fn into_mode(self) -> Mode {
         if self.show_lists {
             Mode::ShowLists
+        } else if self.all {
+            Mode::All
         } else if self.all_lists {
             Mode::AllLists
         } else if let Some(id) = self.list {
@@ -126,38 +135,14 @@ async fn main() -> anyhow::Result<()> {
                 println!("No lists configured. Create lists in the admin UI first.");
                 return Ok(());
             }
-            tracing::info!("Sweeping {} list(s)", lists.len());
-            let mut summaries = Vec::with_capacity(lists.len());
-            for list in &lists {
-                let label = format!("list '{}'", list.name);
-                match run_one(
-                    &http,
-                    &server_url,
-                    &api_token,
-                    &ollama_cfg,
-                    Scope::List(list.id),
-                    &label,
-                )
-                .await
-                {
-                    Ok(s) => summaries.push(s),
-                    Err(e) => tracing::error!("List '{}' failed: {e}", list.name),
-                }
-            }
+            let summaries =
+                sweep_all_lists(&http, &server_url, &api_token, &ollama_cfg, &lists).await;
             print_summary(&summaries);
         }
         Mode::UserNews(filter) => {
             let users = fetch_users(&http, &server_url, &api_token).await?;
-            let targets: Vec<UserSummary> = match &filter {
-                Some(name) => {
-                    let needle = name.to_ascii_lowercase();
-                    users
-                        .into_iter()
-                        .filter(|u| u.username.to_ascii_lowercase() == needle)
-                        .collect()
-                }
-                None => users,
-            };
+            let filter_ref = filter.as_deref();
+            let targets = filter_users(&users, filter_ref);
 
             if targets.is_empty() {
                 match &filter {
@@ -168,48 +153,138 @@ async fn main() -> anyhow::Result<()> {
             }
 
             let lists = fetch_lists(&http, &server_url, &api_token).await?;
-            tracing::info!("Sweeping {} user(s)", targets.len());
-            let mut summaries = Vec::new();
-            for u in &targets {
-                let user_lists: Vec<&ListSummary> =
-                    lists.iter().filter(|l| l.user_id == Some(u.id)).collect();
-
-                for list in &user_lists {
-                    let label = format!("list '{}' ({})", list.name, u.username);
-                    match run_one(
-                        &http,
-                        &server_url,
-                        &api_token,
-                        &ollama_cfg,
-                        Scope::List(list.id),
-                        &label,
-                    )
-                    .await
-                    {
-                        Ok(s) => summaries.push(s),
-                        Err(e) => tracing::error!("List '{}' for '{}' failed: {e}", list.name, u.username),
-                    }
-                }
-
-                let label = format!("user '{}'", u.username);
-                match run_one(
-                    &http,
-                    &server_url,
-                    &api_token,
-                    &ollama_cfg,
-                    Scope::User(u.id),
-                    &label,
-                )
-                .await
-                {
-                    Ok(s) => summaries.push(s),
-                    Err(e) => tracing::error!("User '{}' catch-all failed: {e}", u.username),
-                }
-            }
+            let summaries = sweep_user_news(
+                &http,
+                &server_url,
+                &api_token,
+                &ollama_cfg,
+                &targets,
+                &lists,
+            )
+            .await;
             print_summary(&summaries);
+        }
+        Mode::All => {
+            tracing::info!("=== Phase 1/3: unscoped (global feeds) ===");
+            let mut all = Vec::new();
+            match run_one(&http, &server_url, &api_token, &ollama_cfg, Scope::Unscoped, "unscoped").await {
+                Ok(s) => all.push(s),
+                Err(e) => tracing::error!("Unscoped pass failed: {e}"),
+            }
+
+            let lists = fetch_lists(&http, &server_url, &api_token).await?;
+            tracing::info!("=== Phase 2/3: all lists ({}) ===", lists.len());
+            all.extend(
+                sweep_all_lists(&http, &server_url, &api_token, &ollama_cfg, &lists).await,
+            );
+
+            let users = fetch_users(&http, &server_url, &api_token).await?;
+            tracing::info!("=== Phase 3/3: user news ({} users) ===", users.len());
+            all.extend(
+                sweep_user_news(&http, &server_url, &api_token, &ollama_cfg, &users, &lists).await,
+            );
+
+            print_summary(&all);
         }
     }
     Ok(())
+}
+
+fn filter_users(users: &[UserSummary], filter: Option<&str>) -> Vec<UserSummary> {
+    match filter {
+        Some(name) => {
+            let needle = name.to_ascii_lowercase();
+            users
+                .iter()
+                .filter(|u| u.username.to_ascii_lowercase() == needle)
+                .cloned()
+                .collect()
+        }
+        None => users.to_vec(),
+    }
+}
+
+async fn sweep_all_lists(
+    http: &reqwest::Client,
+    server_url: &str,
+    api_token: &str,
+    ollama_cfg: &OllamaConfig,
+    lists: &[ListSummary],
+) -> Vec<RunSummary> {
+    if lists.is_empty() {
+        return vec![];
+    }
+    tracing::info!("Sweeping {} list(s)", lists.len());
+    let mut summaries = Vec::with_capacity(lists.len());
+    for list in lists {
+        let label = format!("list '{}'", list.name);
+        match run_one(
+            http,
+            server_url,
+            api_token,
+            ollama_cfg,
+            Scope::List(list.id),
+            &label,
+        )
+        .await
+        {
+            Ok(s) => summaries.push(s),
+            Err(e) => tracing::error!("List '{}' failed: {e}", list.name),
+        }
+    }
+    summaries
+}
+
+async fn sweep_user_news(
+    http: &reqwest::Client,
+    server_url: &str,
+    api_token: &str,
+    ollama_cfg: &OllamaConfig,
+    users: &[UserSummary],
+    lists: &[ListSummary],
+) -> Vec<RunSummary> {
+    if users.is_empty() {
+        return vec![];
+    }
+    tracing::info!("Sweeping {} user(s)", users.len());
+    let mut summaries = Vec::new();
+    for u in users {
+        let user_lists: Vec<&ListSummary> =
+            lists.iter().filter(|l| l.user_id == Some(u.id)).collect();
+
+        for list in &user_lists {
+            let label = format!("list '{}' ({})", list.name, u.username);
+            match run_one(
+                http,
+                server_url,
+                api_token,
+                ollama_cfg,
+                Scope::List(list.id),
+                &label,
+            )
+            .await
+            {
+                Ok(s) => summaries.push(s),
+                Err(e) => tracing::error!("List '{}' for '{}' failed: {e}", list.name, u.username),
+            }
+        }
+
+        let label = format!("user '{}'", u.username);
+        match run_one(
+            http,
+            server_url,
+            api_token,
+            ollama_cfg,
+            Scope::User(u.id),
+            &label,
+        )
+        .await
+        {
+            Ok(s) => summaries.push(s),
+            Err(e) => tracing::error!("User '{}' catch-all failed: {e}", u.username),
+        }
+    }
+    summaries
 }
 
 struct RunSummary {

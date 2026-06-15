@@ -70,6 +70,18 @@
         <span class="toc-leader"></span>
         <span class="toc-count">{{ published.len() }}</span>
     </a>
+    <a href="#sec-liked">
+        <span class="toc-num">VII</span>
+        <span class="toc-name">Liked</span>
+        <span class="toc-leader"></span>
+        <span class="toc-count">{{ liked.len() }}</span>
+    </a>
+    <a href="#sec-read-later">
+        <span class="toc-num">VIII</span>
+        <span class="toc-name">Read Later</span>
+        <span class="toc-leader"></span>
+        <span class="toc-count">{{ read_later.len() }}</span>
+    </a>
 </nav>
 
 <div class="desk-content">
@@ -193,6 +205,25 @@
         </fieldset>
         {% endif %}
         <button type="submit" class="btn">Import CSV</button>
+    </form>
+
+    <form action="/user/feeds/import-opml" method="post" class="import-feeds-form"
+          enctype="multipart/form-data">
+        <label for="opml">Upload OPML file (from Feedly, NewsBlur, Reeder, &hellip;)</label>
+        <input type="file" id="opml" name="file" accept=".opml,.xml,application/xml,text/xml" required>
+        {% if !lists.is_empty() %}
+        <fieldset class="import-lists">
+            <legend>Also assign all imported feeds to these lists (optional)</legend>
+            {% for l in lists %}
+            <label class="check-pill">
+                <input type="checkbox" name="list_ids" value="{{ l.id }}">
+                {{ l.name }}
+            </label>
+            {% endfor %}
+        </fieldset>
+        {% endif %}
+        <p class="hint">Categories in the file become Lists automatically.</p>
+        <button type="submit" class="btn">Import OPML</button>
     </form>
 
     {% if feeds.is_empty() %}
@@ -387,6 +418,76 @@
                             hx-confirm="Delete this article permanently? Its source articles will become eligible for regeneration."
                             class="btn btn-sm btn-danger">
                         Delete
+                    </button>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+</section>
+
+<section class="desk-section" id="sec-liked">
+    <h2>Liked <span class="eyebrow">articles you have liked</span></h2>
+    {% if liked.is_empty() %}
+    <p class="empty">No likes yet.</p>
+    {% else %}
+    <table class="drafts-table">
+        <thead>
+            <tr>
+                <th>Title</th>
+                <th>Category</th>
+                <th>Published</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for article in liked %}
+            <tr id="liked-row-{{ article.id }}">
+                <td><a href="/article/{{ article.slug }}">{{ article.title }}</a></td>
+                <td>{{ article.category.as_deref().unwrap_or("—") }}</td>
+                <td>{{ article.formatted_published_at() }}</td>
+                <td>
+                    <button hx-post="/api/user/article/{{ article.id }}/unlike"
+                            hx-target="#liked-row-{{ article.id }}"
+                            hx-swap="delete"
+                            class="btn btn-sm btn-danger">
+                        Remove
+                    </button>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+</section>
+
+<section class="desk-section" id="sec-read-later">
+    <h2>Read Later <span class="eyebrow">saved for later</span></h2>
+    {% if read_later.is_empty() %}
+    <p class="empty">Nothing saved.</p>
+    {% else %}
+    <table class="drafts-table">
+        <thead>
+            <tr>
+                <th>Title</th>
+                <th>Category</th>
+                <th>Published</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for article in read_later %}
+            <tr id="rl-row-{{ article.id }}">
+                <td><a href="/article/{{ article.slug }}">{{ article.title }}</a></td>
+                <td>{{ article.category.as_deref().unwrap_or("—") }}</td>
+                <td>{{ article.formatted_published_at() }}</td>
+                <td>
+                    <button hx-post="/api/user/article/{{ article.id }}/unread-later"
+                            hx-target="#rl-row-{{ article.id }}"
+                            hx-swap="delete"
+                            class="btn btn-sm btn-danger">
+                        Remove
                     </button>
                 </td>
             </tr>

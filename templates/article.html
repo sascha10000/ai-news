@@ -26,7 +26,43 @@
         {% if let Some(cat) = article.category.as_ref() %}<span>{{ cat }}</span>{% endif %}
         <time>{{ article.formatted_published_at() }}</time>
         <span>{{ all_sources.len() }} {% if all_sources.len() == 1 %}source{% else %}sources{% endif %}</span>
+        {% if like_count > 0 %}<span>{{ like_count }} {% if like_count == 1 %}like{% else %}likes{% endif %}</span>{% endif %}
     </div>
+
+    {% if viewer_user_id.is_some() %}
+    <div class="article-actions">
+        {% if viewer_liked %}
+        <button id="like-btn-{{ article.id }}"
+                hx-post="/api/user/article/{{ article.id }}/unlike"
+                hx-target="#like-btn-{{ article.id }}"
+                hx-swap="outerHTML"
+                class="btn btn-sm btn-success"
+                title="You liked this">&#9829; Liked</button>
+        {% else %}
+        <button id="like-btn-{{ article.id }}"
+                hx-post="/api/user/article/{{ article.id }}/like"
+                hx-target="#like-btn-{{ article.id }}"
+                hx-swap="outerHTML"
+                class="btn btn-sm"
+                title="Like this article">&#9825; Like</button>
+        {% endif %}
+        {% if viewer_read_later %}
+        <button id="rl-btn-{{ article.id }}"
+                hx-post="/api/user/article/{{ article.id }}/unread-later"
+                hx-target="#rl-btn-{{ article.id }}"
+                hx-swap="outerHTML"
+                class="btn btn-sm btn-success"
+                title="Saved for later">&#9733; Saved</button>
+        {% else %}
+        <button id="rl-btn-{{ article.id }}"
+                hx-post="/api/user/article/{{ article.id }}/read-later"
+                hx-target="#rl-btn-{{ article.id }}"
+                hx-swap="outerHTML"
+                class="btn btn-sm"
+                title="Save to read later">&#9734; Read later</button>
+        {% endif %}
+    </div>
+    {% endif %}
 
     <div class="article-body">
         {% for sentence in sentences %}

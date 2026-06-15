@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+
+{% block title %}OPML import &mdash; errors{% endblock %}
+
+{% block content %}
+<div class="admin-header">
+    <h1>OPML import &mdash; please fix {{ errors.len() }} error(s)</h1>
+    <a href="/user" class="btn btn-sm">Cancel</a>
+</div>
+
+<section class="admin-section">
+    <p class="hint">Nothing was saved. Fix the file and re-upload.</p>
+
+    <table class="feeds-table">
+        <thead>
+            <tr><th>Outline #</th><th>Problem</th><th>Content</th></tr>
+        </thead>
+        <tbody>
+            {% for err in errors %}
+            <tr>
+                <td><code>{{ err.line }}</code></td>
+                <td>{{ err.message }}</td>
+                <td class="url-cell"><code>{{ err.raw }}</code></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <form action="/user/feeds/import-opml" method="post" class="import-feeds-form"
+          enctype="multipart/form-data">
+        <label for="opml">Re-upload corrected file:</label>
+        <input type="file" id="opml" name="file" accept=".opml,.xml,application/xml,text/xml" required>
+        {% if !lists.is_empty() %}
+        <fieldset class="import-lists">
+            <legend>Also assign all imported feeds to these lists (optional)</legend>
+            {% for l in lists %}
+            <label class="check-pill">
+                <input type="checkbox" name="list_ids" value="{{ l.id }}">
+                {{ l.name }}
+            </label>
+            {% endfor %}
+        </fieldset>
+        {% endif %}
+        <button type="submit" class="btn">Import OPML</button>
+    </form>
+</section>
+{% endblock %}

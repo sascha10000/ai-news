@@ -5,3 +5,4 @@ pub mod generated_article;
 pub mod citation;
 pub mod session;
 pub mod user;
+pub mod article_interaction;

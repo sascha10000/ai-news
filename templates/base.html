@@ -3,15 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}AI News{% endblock %}</title>
+    <title>{% block title %}edda{% endblock %}</title>
     {% block head %}
     <meta property="og:type" content="website">
-    <meta property="og:title" content="AI News">
-    <meta property="og:description" content="AI-generated news with full source attribution. Every sentence is sourced.">
+    <meta property="og:title" content="edda">
+    <meta property="og:description" content="Synthesized news with full source attribution. Every sentence is sourced.">
     <meta property="og:image" content="/static/hero.png">
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="AI News">
-    <meta name="twitter:description" content="AI-generated news with full source attribution. Every sentence is sourced.">
+    <meta name="twitter:title" content="edda">
+    <meta name="twitter:description" content="Synthesized news with full source attribution. Every sentence is sourced.">
     <meta name="twitter:image" content="/static/hero.png">
     {% endblock %}
     <script src="/static/htmx.min.js"></script>
@@ -22,9 +22,10 @@
 <body>
     <header>
         <nav>
-            <a href="/" class="logo">AI News</a>
+            <a href="/" class="logo">edda</a>
             <div class="nav-links">
                 <a href="/">Home</a>
+                <a href="/why-account">Why an account?</a>
                 <a href="/login">Login</a>
             </div>
         </nav>
@@ -34,7 +35,7 @@
         {% block content %}{% endblock %}
     </main>
     <footer>
-        AI News &middot; Every sentence sourced
+        edda &middot; Every sentence sourced
     </footer>
 </body>
 </html>

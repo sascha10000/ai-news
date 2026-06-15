@@ -246,6 +246,13 @@ main {
     border-bottom: 1px solid var(--rule);
 }
 
+.article-actions {
+    grid-column: 1 / -1;
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+}
+
 .article-body {
     grid-column: 1;
     font-family: var(--font-body);
@@ -1088,3 +1095,121 @@ body:has(.desk-masthead) {
     }
     .desk-toc .toc-leader { display: none; }
 }
+
+/* ============================================================
+   WHY AN ACCOUNT — public editorial column, citation idiom
+   ============================================================ */
+
+.pitch {
+    max-width: 720px;
+    margin: 1rem auto 0;
+}
+
+/* Headline matches .article-detail h1 scale, not the admin masthead */
+.pitch h1 {
+    font-family: var(--font-display);
+    font-weight: 500;
+    font-variation-settings: "opsz" 144;
+    font-size: clamp(1.9rem, 3.6vw, 2.8rem);
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+    margin: 0 0 0.5rem;
+}
+
+/* Italic standfirst — the print-paper "dek" beneath the head */
+.pitch .dek {
+    font-family: var(--font-body);
+    font-style: italic;
+    font-size: 1.1rem;
+    line-height: 1.45;
+    color: var(--muted);
+    margin: 0 0 1.5rem;
+    padding-bottom: 1.5rem;
+    border-bottom: 1px solid var(--rule);
+}
+
+.pitch .lead {
+    font-family: var(--font-body);
+    font-size: 1.12rem;
+    line-height: 1.65;
+    color: var(--ink);
+    max-width: var(--measure);
+    margin: 0 0 1.5rem;
+}
+
+.pitch .benefit {
+    padding: 1.5rem 0;
+    border-top: 1px solid var(--rule);
+}
+
+/* Subhead matches .article-card h2 scale, not the masthead */
+.pitch .benefit h2 {
+    font-family: var(--font-display);
+    font-weight: 500;
+    font-variation-settings: "opsz" 36;
+    font-size: 1.35rem;
+    line-height: 1.2;
+    letter-spacing: -0.012em;
+    margin: 0 0 0.55rem;
+    display: flex;
+    align-items: baseline;
+    gap: 0.65rem;
+}
+
+/* The single flourish: mono-accent numerals reusing the citation idiom
+   established by .source-id in article bodies */
+.pitch .benefit-no {
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    color: var(--accent);
+    letter-spacing: 0.06em;
+    font-weight: 500;
+    flex: none;
+}
+
+.pitch .benefit p {
+    font-family: var(--font-body);
+    font-size: 1.02rem;
+    line-height: 1.6;
+    color: var(--ink);
+    margin: 0;
+    max-width: var(--measure);
+}
+
+.pitch .benefit p code {
+    font-family: var(--font-mono);
+    font-size: 0.85em;
+    color: var(--accent);
+    background: none;
+    padding: 0;
+}
+
+/* CTA — centered hairline-topped, mirrors .load-more rhythm */
+.pitch .cta {
+    margin: 2.5rem 0 4rem;
+    padding-top: 2rem;
+    border-top: 1px solid var(--rule);
+    text-align: center;
+}
+
+.pitch .cta .btn-primary {
+    font-size: 0.95rem;
+    padding: 0.7rem 1.6rem;
+    text-decoration: none;
+    display: inline-block;
+}
+
+.pitch .cta .signin {
+    margin: 1rem 0 0;
+    color: var(--muted);
+    font-size: 0.9rem;
+}
+
+.pitch .cta .signin a {
+    color: var(--muted);
+    border-bottom: 1px solid var(--rule);
+    text-decoration: none;
+    transition: color 120ms ease, border-color 120ms ease;
+}
+
+.pitch .cta .signin a:hover { color: var(--ink); border-bottom-color: var(--ink); }
