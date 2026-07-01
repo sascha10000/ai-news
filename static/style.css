@@ -845,6 +845,14 @@ body:has(.desk-masthead) {
 }
 .desk-section .section-header h2 { margin: 0; }
 
+.auto-publish-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    margin: 0.25rem 0 0.9rem;
+}
+.auto-publish-toggle .hint { margin: 0; }
+
 /* Galley tables — typographic dense data */
 .desk-section table {
     width: 100%;

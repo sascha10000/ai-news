@@ -8,6 +8,7 @@ use axum_extra::extract::Form as ExtraForm;
 use serde::Deserialize;
 
 use crate::error::AppError;
+use crate::models::app_settings::AppSettings;
 use crate::models::feed::{CreateFeed, Feed};
 use crate::models::generated_article::{ArticleWithOwner, GeneratedArticle};
 use crate::models::list::{CreateList, List, ListWithOwner};
@@ -39,6 +40,7 @@ pub struct DashboardTemplate {
     pub published: Vec<ArticleWithOwner>,
     pub categories: Vec<String>,
     pub server_llm_enabled: bool,
+    pub auto_publish: bool,
 }
 
 pub struct FeedWithLists {
@@ -71,6 +73,7 @@ pub async fn dashboard(
     let drafts = GeneratedArticle::drafts_with_owner(&state.db).await?;
     let published = GeneratedArticle::all_published_with_owner(&state.db).await?;
     let categories = GeneratedArticle::all_categories(&state.db).await?;
+    let auto_publish = AppSettings::auto_publish(&state.db).await?;
 
     Ok(DashboardTemplate {
         feeds: feeds_with_lists,
@@ -80,6 +83,7 @@ pub async fn dashboard(
         published,
         categories,
         server_llm_enabled: SERVER_LLM_ENABLED,
+        auto_publish,
     })
 }
 

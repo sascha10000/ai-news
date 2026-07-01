@@ -6,3 +6,4 @@ pub mod citation;
 pub mod session;
 pub mod user;
 pub mod article_interaction;
+pub mod app_settings;

@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use crate::error::AppError;
+use crate::models::app_settings::AppSettings;
 use crate::models::citation::{GeneratedSentence, SentenceCitation};
 use crate::models::generated_article::GeneratedArticle;
 use crate::models::list::List;
@@ -13,6 +14,7 @@ pub async fn ingest_articles(
 ) -> Result<Vec<i64>, AppError> {
     let mut created = Vec::new();
     let mut owner_cache: HashMap<i64, Option<i64>> = HashMap::new();
+    let auto_publish = AppSettings::auto_publish(pool).await?;
 
     for article in req.articles {
         if article.sentences.is_empty() {
@@ -54,6 +56,12 @@ pub async fn ingest_articles(
             for &source_id in &sentence.source_article_ids {
                 SentenceCitation::insert(pool, sentence_id, source_id).await?;
             }
+        }
+
+        // Auto-publish only applies to global (admin-owned) articles so that
+        // user-owned drafts still go through the user's own review queue.
+        if auto_publish && user_id.is_none() {
+            GeneratedArticle::set_status(pool, id, "published").await?;
         }
 
         tracing::info!("Ingested article '{}' (id={})", article.title, id);

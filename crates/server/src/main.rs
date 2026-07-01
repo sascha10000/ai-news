@@ -154,6 +154,7 @@ async fn main() {
         .route("/api/article/{id}/unpublish", post(handlers::api::unpublish_article))
         .route("/api/article/{id}/reject", post(handlers::api::reject_article))
         .route("/api/article/{id}/delete", post(handlers::api::delete_article))
+        .route("/api/admin/settings/auto-publish", post(handlers::api::set_auto_publish))
         // Token-protected remote-control API
         .route("/api/sources/pending", get(handlers::remote::pending_sources))
         .route("/api/lists", get(handlers::remote::lists))

@@ -263,6 +263,25 @@
 
 <section class="desk-section" id="sec-drafts">
     <h2>Copy desk <span class="eyebrow">drafts awaiting decision</span></h2>
+    <form class="auto-publish-toggle"
+          hx-post="/api/admin/settings/auto-publish"
+          hx-target="#auto-publish-status"
+          hx-trigger="change">
+        <label class="check-pill">
+            <input type="checkbox"
+                   name="enabled"
+                   value="1"
+                   {% if auto_publish %}checked{% endif %}>
+            Auto-publish new articles
+        </label>
+        <span id="auto-publish-status" class="hint">
+            {% if auto_publish %}
+            Auto-publish on &mdash; new global articles skip drafts.
+            {% else %}
+            Auto-publish off &mdash; new articles land in drafts.
+            {% endif %}
+        </span>
+    </form>
     <div id="publish-all-result"></div>
     {% if drafts.is_empty() %}
     <p class="empty">No drafts. Generate some articles first.</p>

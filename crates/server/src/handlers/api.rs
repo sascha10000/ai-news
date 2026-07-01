@@ -7,6 +7,7 @@ use axum::Form;
 use axum_extra::extract::Form as ExtraForm;
 
 use crate::error::AppError;
+use crate::models::app_settings::AppSettings;
 use crate::models::feed::Feed;
 use crate::models::generated_article::GeneratedArticle;
 use crate::services::feed_fetcher;
@@ -259,4 +260,27 @@ fn refresh_response(msg: String) -> (HeaderMap, Html<String>) {
     let mut headers = HeaderMap::new();
     headers.insert("HX-Refresh", HeaderValue::from_static("true"));
     (headers, Html(format!(r#"<div class="success">{msg}</div>"#)))
+}
+
+#[derive(serde::Deserialize)]
+pub struct SetAutoPublishForm {
+    // HTML checkboxes only submit when checked, so `enabled` being absent
+    // means "off" and any present value means "on".
+    #[serde(default)]
+    pub enabled: Option<String>,
+}
+
+pub async fn set_auto_publish(
+    _auth: RequireAdmin,
+    State(state): State<AppState>,
+    Form(input): Form<SetAutoPublishForm>,
+) -> Result<Html<String>, AppError> {
+    let enabled = input.enabled.is_some();
+    AppSettings::set_auto_publish(&state.db, enabled).await?;
+    let msg = if enabled {
+        "Auto-publish on — new global articles skip drafts."
+    } else {
+        "Auto-publish off — new articles land in drafts."
+    };
+    Ok(Html(format!(r#"<span class="hint">{msg}</span>"#)))
 }
