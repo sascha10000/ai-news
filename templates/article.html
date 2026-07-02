@@ -66,9 +66,39 @@
 
     <div class="article-body">
         {% for sentence in sentences %}
-        <span class="sentence">{{ sentence.content }}{% for source in sentence.sources %}<sup><a href="#source-{{ source.id }}" title="{{ source.title }}">[{{ source.id }}]</a></sup>{% endfor %}</span>
+        <span class="sentence">{{ sentence.content }}{% for source in sentence.sources %}<sup><a href="{{ source.url }}" target="_blank" rel="noopener noreferrer" data-source-id="{{ source.id }}" title="{{ source.title }}">[{{ source.id }}]</a></sup>{% endfor %}</span>
         {% endfor %}
     </div>
+
+    <script>
+        // Superscript click opens the source in a new tab natively (via
+        // target=_blank on the anchor). This handler runs in parallel to
+        // preserve the old marginalia behavior: scroll the source sidebar
+        // entry into view and give it a persistent highlight.
+        (function() {
+            var body = document.querySelector('.article-body');
+            if (!body) return;
+
+            // Legacy footnotes used href="#source-N", so old history entries,
+            // bookmarks, or bfcache restores can arrive here with a stale
+            // fragment. Strip it so we start with no source highlighted.
+            if (window.location.hash.indexOf('#source-') === 0) {
+                history.replaceState(null, '', window.location.pathname + window.location.search);
+            }
+
+            body.addEventListener('click', function(e) {
+                var link = e.target.closest('sup a[data-source-id]');
+                if (!link) return;
+                var id = link.dataset.sourceId;
+                var li = document.getElementById('source-' + id);
+                if (!li) return;
+                document.querySelectorAll('.sources li.is-active')
+                    .forEach(function(el) { el.classList.remove('is-active'); });
+                li.classList.add('is-active');
+                li.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+            });
+        })();
+    </script>
 
     <aside class="sources">
         <h2>Sources</h2>

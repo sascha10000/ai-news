@@ -14,6 +14,18 @@
     <meta name="twitter:description" content="Synthesized news with full source attribution. Every sentence is sourced.">
     <meta name="twitter:image" content="/static/hero.png">
     {% endblock %}
+    <script>
+        // Read persisted view mode BEFORE first paint so the row/cards
+        // choice applies immediately (no flash between layouts).
+        (function() {
+            try {
+                var v = localStorage.getItem('edda-view');
+                document.documentElement.setAttribute('data-view', v === 'rows' ? 'rows' : 'cards');
+            } catch (e) {
+                document.documentElement.setAttribute('data-view', 'cards');
+            }
+        })();
+    </script>
     <script src="/static/htmx.min.js"></script>
     <link rel="stylesheet" href="/static/style.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -41,5 +53,18 @@
             <a href="/datenschutz">Datenschutz</a>
         </nav>
     </footer>
+    <script>
+        // Delegated click so the toggle keeps working after HTMX swaps.
+        document.addEventListener('click', function(e) {
+            var btn = e.target.closest('.view-toggle-btn');
+            if (!btn) return;
+            var v = btn.dataset.viewTarget === 'rows' ? 'rows' : 'cards';
+            document.documentElement.setAttribute('data-view', v);
+            try { localStorage.setItem('edda-view', v); } catch (err) {}
+            document.querySelectorAll('.view-toggle-btn').forEach(function(b) {
+                b.setAttribute('aria-pressed', String(b.dataset.viewTarget === v));
+            });
+        });
+    </script>
 </body>
 </html>

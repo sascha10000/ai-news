@@ -23,6 +23,11 @@
 {% if articles.is_empty() %}
 <p class="empty">No published articles in this list yet.</p>
 {% else %}
+<div class="view-toggle" role="group" aria-label="Article layout">
+    <button type="button" class="view-toggle-btn" data-view-target="cards">Cards</button>
+    <span class="view-toggle-sep" aria-hidden="true">/</span>
+    <button type="button" class="view-toggle-btn" data-view-target="rows">Rows</button>
+</div>
 <div id="article-list" class="article-grid">
     {% for article in articles %}
     {% include "partials/article_card.html" %}
