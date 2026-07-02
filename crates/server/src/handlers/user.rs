@@ -17,7 +17,7 @@ use crate::models::generated_article::GeneratedArticle;
 use crate::models::list::{CreateList, List};
 use crate::models::session::{Identity, Session};
 use crate::models::source_article::SourceArticle;
-use crate::models::user::{User, UserError};
+use crate::models::user::{language_label, User, UserError, SUPPORTED_LANGUAGES};
 use crate::services::feed_opml::ImportError;
 use crate::services::{feed_fetcher, feed_import, feed_opml};
 
@@ -43,6 +43,7 @@ pub struct UserDashboardTemplate {
     pub read_later: Vec<GeneratedArticle>,
     pub categories: Vec<String>,
     pub server_llm_enabled: bool,
+    pub languages: &'static [(&'static str, &'static str)],
 }
 
 #[derive(Deserialize)]
@@ -173,6 +174,7 @@ pub async fn dashboard(
         read_later,
         categories,
         server_llm_enabled: SERVER_LLM_ENABLED,
+        languages: SUPPORTED_LANGUAGES,
     })
 }
 
@@ -192,6 +194,31 @@ pub async fn toggle_public(
     let public = input.public.is_some();
     User::set_public(&state.db, uid, public).await?;
     Ok(Redirect::to("/user"))
+}
+
+#[derive(Deserialize)]
+pub struct SetLanguageForm {
+    #[serde(default)]
+    pub language: String,
+}
+
+pub async fn set_language(
+    RequireUser(uid): RequireUser,
+    State(state): State<AppState>,
+    Form(input): Form<SetLanguageForm>,
+) -> Result<Redirect, AppError> {
+    let trimmed = input.language.trim();
+    let value = if trimmed.is_empty() {
+        None
+    } else if language_label(trimmed).is_some() {
+        Some(trimmed)
+    } else {
+        return Err(AppError::BadRequest(format!(
+            "Unsupported language code '{trimmed}'"
+        )));
+    };
+    User::set_language(&state.db, uid, value).await?;
+    Ok(Redirect::to("/user#sec-operations"))
 }
 
 // ---------- feeds ----------

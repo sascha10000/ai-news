@@ -18,7 +18,7 @@ pub struct LlmSentence {
     pub sources: Vec<i64>,
 }
 
-pub fn build_prompt(articles: &[&PendingSource]) -> String {
+pub fn build_prompt(articles: &[&PendingSource], target_language: Option<&str>) -> String {
     let mut prompt = String::from(
         r#"You are a professional news journalist. You will be given a set of source articles, each identified by a numeric ID and a publication date. Your task is to write a NEW synthesized news article that covers the topic.
 
@@ -32,10 +32,20 @@ STRICT RULES:
 7. Write 5-15 sentences. Be concise and journalistic.
 8. When sources span multiple dates, weight the most recent reporting for the lede, headline framing, and present-tense facts. Older sources are background context only — do not present stale information as current. If only old sources are available, write the piece as a retrospective rather than implying it is breaking news.
 9. Do NOT include any text outside the JSON object.
-
-SOURCE ARTICLES (sorted newest first):
 "#,
     );
+
+    if let Some(language) = target_language {
+        // Note: we do NOT translate JSON keys. If we said "write in German",
+        // some models translate "title"/"category"/"sentences" too, which
+        // then fails serde parsing downstream. Explicit is safer than clever.
+        prompt.push_str(&format!(
+            "10. Write the article in {language}. Translate the source content as needed. Keep the JSON keys (\"title\", \"category\", \"sentences\", \"text\", \"sources\") exactly as shown — only the human-readable string values should be in {language}. The \"category\" value stays in English so categories stay consistent across users.\n",
+            language = language,
+        ));
+    }
+
+    prompt.push_str("\nSOURCE ARTICLES (sorted newest first):\n");
 
     for article in articles {
         let content = if article.content.len() > 1500 {

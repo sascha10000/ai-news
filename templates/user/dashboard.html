@@ -113,6 +113,18 @@
     {% else %}
     <p class="empty">Article generation runs from the local <code>client</code> CLI when the server-llm feature is off.</p>
     {% endif %}
+
+    <form action="/user/settings/language" method="post" class="add-feed-form">
+        <label for="language">Summary language</label>
+        <select id="language" name="language">
+            <option value=""{% if user.language.is_none() %} selected{% endif %}>No preference</option>
+            {% for lang in languages %}
+            <option value="{{ lang.0 }}"{% if let Some(current) = user.language %}{% if current == lang.0 %} selected{% endif %}{% endif %}>{{ lang.1 }}</option>
+            {% endfor %}
+        </select>
+        <button type="submit" class="btn btn-sm">Save</button>
+        <span class="hint">Applied when the LLM drafts summaries for your lists.</span>
+    </form>
 </section>
 
 <section class="desk-section" id="sec-profile">

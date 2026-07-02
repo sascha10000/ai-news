@@ -2,8 +2,8 @@ use std::env;
 use std::time::Duration;
 
 use ai_news_core::{
-    IngestArticleRequest, IngestArticlesRequest, IngestArticlesResponse, ListSummary,
-    ListsResponse, PendingSourcesResponse, UserSummary, UsersResponse,
+    language_label, IngestArticleRequest, IngestArticlesRequest, IngestArticlesResponse,
+    ListSummary, ListsResponse, PendingSourcesResponse, UserSummary, UsersResponse,
 };
 use ai_news_generation::{check_model_available, generate_drafts_for_list, OllamaConfig};
 use clap::{ArgGroup, Parser};
@@ -114,16 +114,24 @@ async fn main() -> anyhow::Result<()> {
     match mode {
         Mode::ShowLists => unreachable!(),
         Mode::Unscoped => {
-            let summary = run_one(&http, &server_url, &api_token, &ollama_cfg, Scope::Unscoped, "unscoped").await?;
+            let summary = run_one(&http, &server_url, &api_token, &ollama_cfg, Scope::Unscoped, None, "unscoped").await?;
             print_summary(&[summary]);
         }
         Mode::List(list_id) => {
+            // Look up the list's owner to pick up their language preference.
+            let lists = fetch_lists(&http, &server_url, &api_token).await?;
+            let users = fetch_users(&http, &server_url, &api_token).await?;
+            let lang = lists
+                .iter()
+                .find(|l| l.id == list_id)
+                .and_then(|l| list_language(l, &users));
             let summary = run_one(
                 &http,
                 &server_url,
                 &api_token,
                 &ollama_cfg,
                 Scope::List(list_id),
+                lang,
                 &format!("list {list_id}"),
             )
             .await?;
@@ -135,8 +143,9 @@ async fn main() -> anyhow::Result<()> {
                 println!("No lists configured. Create lists in the admin UI first.");
                 return Ok(());
             }
+            let users = fetch_users(&http, &server_url, &api_token).await?;
             let summaries =
-                sweep_all_lists(&http, &server_url, &api_token, &ollama_cfg, &lists).await;
+                sweep_all_lists(&http, &server_url, &api_token, &ollama_cfg, &lists, &users).await;
             print_summary(&summaries);
         }
         Mode::UserNews(filter) => {
@@ -167,18 +176,19 @@ async fn main() -> anyhow::Result<()> {
         Mode::All => {
             tracing::info!("=== Phase 1/3: unscoped (global feeds) ===");
             let mut all = Vec::new();
-            match run_one(&http, &server_url, &api_token, &ollama_cfg, Scope::Unscoped, "unscoped").await {
+            match run_one(&http, &server_url, &api_token, &ollama_cfg, Scope::Unscoped, None, "unscoped").await {
                 Ok(s) => all.push(s),
                 Err(e) => tracing::error!("Unscoped pass failed: {e}"),
             }
 
             let lists = fetch_lists(&http, &server_url, &api_token).await?;
+            let users = fetch_users(&http, &server_url, &api_token).await?;
+
             tracing::info!("=== Phase 2/3: all lists ({}) ===", lists.len());
             all.extend(
-                sweep_all_lists(&http, &server_url, &api_token, &ollama_cfg, &lists).await,
+                sweep_all_lists(&http, &server_url, &api_token, &ollama_cfg, &lists, &users).await,
             );
 
-            let users = fetch_users(&http, &server_url, &api_token).await?;
             tracing::info!("=== Phase 3/3: user news ({} users) ===", users.len());
             all.extend(
                 sweep_user_news(&http, &server_url, &api_token, &ollama_cfg, &users, &lists).await,
@@ -188,6 +198,15 @@ async fn main() -> anyhow::Result<()> {
         }
     }
     Ok(())
+}
+
+fn user_language(user: &UserSummary) -> Option<&'static str> {
+    user.language.as_deref().and_then(language_label)
+}
+
+fn list_language(list: &ListSummary, users: &[UserSummary]) -> Option<&'static str> {
+    let owner_id = list.user_id?;
+    users.iter().find(|u| u.id == owner_id).and_then(user_language)
 }
 
 fn filter_users(users: &[UserSummary], filter: Option<&str>) -> Vec<UserSummary> {
@@ -210,6 +229,7 @@ async fn sweep_all_lists(
     api_token: &str,
     ollama_cfg: &OllamaConfig,
     lists: &[ListSummary],
+    users: &[UserSummary],
 ) -> Vec<RunSummary> {
     if lists.is_empty() {
         return vec![];
@@ -224,6 +244,7 @@ async fn sweep_all_lists(
             api_token,
             ollama_cfg,
             Scope::List(list.id),
+            list_language(list, users),
             &label,
         )
         .await
@@ -249,6 +270,7 @@ async fn sweep_user_news(
     tracing::info!("Sweeping {} user(s)", users.len());
     let mut summaries = Vec::new();
     for u in users {
+        let lang = user_language(u);
         let user_lists: Vec<&ListSummary> =
             lists.iter().filter(|l| l.user_id == Some(u.id)).collect();
 
@@ -260,6 +282,7 @@ async fn sweep_user_news(
                 api_token,
                 ollama_cfg,
                 Scope::List(list.id),
+                lang,
                 &label,
             )
             .await
@@ -276,6 +299,7 @@ async fn sweep_user_news(
             api_token,
             ollama_cfg,
             Scope::User(u.id),
+            lang,
             &label,
         )
         .await
@@ -300,6 +324,7 @@ async fn run_one(
     api_token: &str,
     ollama_cfg: &OllamaConfig,
     scope: Scope,
+    target_language: Option<&str>,
     label: &str,
 ) -> anyhow::Result<RunSummary> {
     tracing::info!("[{label}] fetching pending sources...");
@@ -329,8 +354,13 @@ async fn run_one(
         Scope::List(id) => Some(id),
         _ => None,
     };
-    let mut drafts: Vec<IngestArticleRequest> =
-        generate_drafts_for_list(pending.sources, ollama_cfg, list_id_for_drafts).await?;
+    let mut drafts: Vec<IngestArticleRequest> = generate_drafts_for_list(
+        pending.sources,
+        ollama_cfg,
+        list_id_for_drafts,
+        target_language,
+    )
+    .await?;
     if let Scope::User(uid) = scope {
         for d in drafts.iter_mut() {
             d.user_id = Some(uid);

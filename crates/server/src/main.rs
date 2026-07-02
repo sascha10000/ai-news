@@ -105,6 +105,7 @@ async fn main() {
         // User routes (protected)
         .route("/user", get(handlers::user::dashboard))
         .route("/user/settings/public", post(handlers::user::toggle_public))
+        .route("/user/settings/language", post(handlers::user::set_language))
         .route("/user/feeds", post(handlers::user::create_feed))
         .route("/user/feeds/import", post(handlers::user::import_feeds))
         .route("/user/feeds/import-opml", post(handlers::user::import_opml))

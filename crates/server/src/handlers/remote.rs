@@ -75,7 +75,7 @@ pub async fn users(
     let rows = User::all_brief(&state.db).await?;
     let users = rows
         .into_iter()
-        .map(|(id, username)| UserSummary { id, username })
+        .map(|(id, username, language)| UserSummary { id, username, language })
         .collect();
     Ok(Json(UsersResponse { users }))
 }

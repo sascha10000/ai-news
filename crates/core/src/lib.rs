@@ -66,9 +66,34 @@ pub struct ListsResponse {
 pub struct UserSummary {
     pub id: i64,
     pub username: String,
+    /// Two-letter language code (e.g. "en", "de") for LLM output. None means
+    /// "no preference" — the model picks whatever fits the sources.
+    #[serde(default)]
+    pub language: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UsersResponse {
     pub users: Vec<UserSummary>,
+}
+
+/// Two-letter language codes the app supports for LLM output, paired with
+/// the human-readable name that gets injected into the prompt. Shared by the
+/// server (form validation, UI dropdown) and the client (mapping user-summary
+/// codes to prompt strings) so a new language only needs to be added once.
+pub const SUPPORTED_LANGUAGES: &[(&str, &str)] = &[
+    ("en", "English"),
+    ("de", "German"),
+    ("fr", "French"),
+    ("es", "Spanish"),
+    ("it", "Italian"),
+    ("pt", "Portuguese"),
+    ("nl", "Dutch"),
+];
+
+pub fn language_label(code: &str) -> Option<&'static str> {
+    SUPPORTED_LANGUAGES
+        .iter()
+        .find(|(c, _)| *c == code)
+        .map(|(_, name)| *name)
 }

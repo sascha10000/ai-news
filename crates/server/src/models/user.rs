@@ -13,7 +13,12 @@ pub struct User {
     pub username: String,
     pub public: bool,
     pub created_at: String,
+    pub language: Option<String>,
 }
+
+// Language table lives in `ai_news_core` so client & server stay in sync;
+// re-export here for callers that only import from the model module.
+pub use ai_news_core::{language_label, SUPPORTED_LANGUAGES};
 
 #[derive(thiserror::Error, Debug)]
 pub enum UserError {
@@ -59,9 +64,11 @@ impl User {
         }
     }
 
-    pub async fn all_brief(pool: &SqlitePool) -> Result<Vec<(i64, String)>, sqlx::Error> {
-        sqlx::query_as::<_, (i64, String)>(
-            "SELECT id, username FROM users ORDER BY username",
+    pub async fn all_brief(
+        pool: &SqlitePool,
+    ) -> Result<Vec<(i64, String, Option<String>)>, sqlx::Error> {
+        sqlx::query_as::<_, (i64, String, Option<String>)>(
+            "SELECT id, username, language FROM users ORDER BY username",
         )
         .fetch_all(pool)
         .await
@@ -69,7 +76,7 @@ impl User {
 
     pub async fn by_id(pool: &SqlitePool, id: i64) -> Result<Option<User>, sqlx::Error> {
         sqlx::query_as::<_, User>(
-            "SELECT id, username, public, created_at FROM users WHERE id = ?",
+            "SELECT id, username, public, created_at, language FROM users WHERE id = ?",
         )
         .bind(id)
         .fetch_optional(pool)
@@ -81,7 +88,7 @@ impl User {
         username: &str,
     ) -> Result<Option<User>, sqlx::Error> {
         sqlx::query_as::<_, User>(
-            "SELECT id, username, public, created_at FROM users WHERE username = ?",
+            "SELECT id, username, public, created_at, language FROM users WHERE username = ?",
         )
         .bind(username.to_lowercase())
         .fetch_optional(pool)
@@ -93,16 +100,16 @@ impl User {
         username: &str,
         password: &str,
     ) -> Result<Option<User>, sqlx::Error> {
-        let row: Option<(i64, String, bool, String, String)> = sqlx::query_as(
-            "SELECT id, username, public, created_at, password_hash FROM users WHERE username = ?",
+        let row: Option<(i64, String, bool, String, Option<String>, String)> = sqlx::query_as(
+            "SELECT id, username, public, created_at, language, password_hash FROM users WHERE username = ?",
         )
         .bind(username.to_lowercase())
         .fetch_optional(pool)
         .await?;
 
-        Ok(row.and_then(|(id, username, public, created_at, hash)| {
+        Ok(row.and_then(|(id, username, public, created_at, language, hash)| {
             if verify_password(password, &hash) {
-                Some(User { id, username, public, created_at })
+                Some(User { id, username, public, created_at, language })
             } else {
                 None
             }
@@ -120,6 +127,34 @@ impl User {
             .execute(pool)
             .await?;
         Ok(())
+    }
+
+    /// `language` is stored as the raw code (e.g. "en", "de") or NULL for
+    /// "no preference". Callers must have already validated the code against
+    /// `SUPPORTED_LANGUAGES`; passing None clears the preference.
+    pub async fn set_language(
+        pool: &SqlitePool,
+        id: i64,
+        language: Option<&str>,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query("UPDATE users SET language = ? WHERE id = ?")
+            .bind(language)
+            .bind(id)
+            .execute(pool)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn language_of(
+        pool: &SqlitePool,
+        id: i64,
+    ) -> Result<Option<String>, sqlx::Error> {
+        let row: Option<(Option<String>,)> =
+            sqlx::query_as("SELECT language FROM users WHERE id = ?")
+                .bind(id)
+                .fetch_optional(pool)
+                .await?;
+        Ok(row.and_then(|r| r.0))
     }
 }
 

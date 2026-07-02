@@ -1,6 +1,7 @@
 use crate::error::AppError;
 use crate::models::list::List;
 use crate::models::source_article::SourceArticle;
+use crate::models::user::{language_label, User};
 use crate::services::ingest;
 use crate::AppState;
 use ai_news_core::{IngestArticlesRequest, PendingSource};
@@ -36,15 +37,36 @@ async fn run_for_scope(state: &AppState, list_id: Option<i64>) -> Result<Vec<i64
     .await?;
     let sources: Vec<PendingSource> = articles.into_iter().map(to_pending_source).collect();
 
-    let drafts = generate_drafts_for_list(sources, &state.ollama_cfg, list_id)
-        .await
-        .map_err(|e| AppError::Llm(e.to_string()))?;
+    // Language preference travels with the list's owning user. Admin/global
+    // lists (user_id = NULL) fall through to None → LLM default.
+    let target_language = resolve_list_language(state, list_id).await?;
+
+    let drafts = generate_drafts_for_list(
+        sources,
+        &state.ollama_cfg,
+        list_id,
+        target_language.as_deref(),
+    )
+    .await
+    .map_err(|e| AppError::Llm(e.to_string()))?;
 
     if drafts.is_empty() {
         return Ok(vec![]);
     }
 
     ingest::ingest_articles(&state.db, IngestArticlesRequest { articles: drafts }).await
+}
+
+async fn resolve_list_language(
+    state: &AppState,
+    list_id: Option<i64>,
+) -> Result<Option<String>, AppError> {
+    let Some(list_id) = list_id else { return Ok(None) };
+    let Some(owner_id) = List::owner_of(&state.db, list_id).await? else {
+        return Ok(None);
+    };
+    let code = User::language_of(&state.db, owner_id).await?;
+    Ok(code.and_then(|c| language_label(&c).map(|name| name.to_string())))
 }
 
 pub fn to_pending_source(a: SourceArticle) -> PendingSource {

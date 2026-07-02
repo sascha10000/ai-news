@@ -25,13 +25,14 @@ pub async fn generate_drafts(
     sources: Vec<PendingSource>,
     cfg: &OllamaConfig,
 ) -> Result<Vec<IngestArticleRequest>, GenerationError> {
-    generate_drafts_for_list(sources, cfg, None).await
+    generate_drafts_for_list(sources, cfg, None, None).await
 }
 
 pub async fn generate_drafts_for_list(
     sources: Vec<PendingSource>,
     cfg: &OllamaConfig,
     list_id: Option<i64>,
+    target_language: Option<&str>,
 ) -> Result<Vec<IngestArticleRequest>, GenerationError> {
     if sources.is_empty() {
         tracing::info!("No source articles to process");
@@ -48,7 +49,7 @@ pub async fn generate_drafts_for_list(
     let mut drafts = Vec::new();
 
     for cluster in &clusters {
-        match generate_one(&ollama, &cfg.model, cluster, list_id).await {
+        match generate_one(&ollama, &cfg.model, cluster, list_id, target_language).await {
             Ok(draft) => drafts.push(draft),
             Err(e) => tracing::error!("Failed to generate article for cluster: {e}"),
         }
@@ -62,8 +63,9 @@ async fn generate_one(
     model: &str,
     sources: &[&PendingSource],
     list_id: Option<i64>,
+    target_language: Option<&str>,
 ) -> Result<IngestArticleRequest, GenerationError> {
-    let prompt = llm::build_prompt(sources);
+    let prompt = llm::build_prompt(sources, target_language);
     let valid_ids: HashSet<i64> = sources.iter().map(|a| a.id).collect();
 
     let mut last_err = None;
