@@ -24,6 +24,7 @@ pub struct IndexTemplate {
     pub active_category: Option<String>,
     pub page: i64,
     pub has_more: bool,
+    pub load_more_base: String,
 }
 
 #[derive(Template, WebTemplate)]
@@ -65,6 +66,7 @@ pub struct UserNewsTemplate {
     pub active_category: Option<String>,
     pub page: i64,
     pub has_more: bool,
+    pub load_more_base: String,
 }
 
 #[derive(Template, WebTemplate)]
@@ -77,6 +79,7 @@ pub struct ListTemplate {
     pub active_category: Option<String>,
     pub page: i64,
     pub has_more: bool,
+    pub load_more_base: String,
 }
 
 #[derive(Deserialize)]
@@ -106,6 +109,7 @@ pub async fn index(
         active_category: category.map(|s| s.to_string()),
         page,
         has_more,
+        load_more_base: "/api/articles".to_string(),
     })
 }
 
@@ -206,6 +210,7 @@ pub async fn user_news(
     let categories =
         GeneratedArticle::published_categories_for_user(&state.db, user.id).await?;
 
+    let load_more_base = format!("/api/user-news/@{}/articles", user.username);
     Ok(UserNewsTemplate {
         username: user.username,
         articles,
@@ -213,8 +218,63 @@ pub async fn user_news(
         active_category: category.map(|s| s.to_string()),
         page,
         has_more,
+        load_more_base,
     }
     .into_response())
+}
+
+pub async fn user_news_articles_page(
+    State(state): State<AppState>,
+    jar: CookieJar,
+    Path(username_with_at): Path<String>,
+    Query(params): Query<Pagination>,
+) -> Result<super::api::ArticleListPartial, AppError> {
+    let username = username_with_at
+        .strip_prefix('@')
+        .unwrap_or(&username_with_at)
+        .to_lowercase();
+    if !is_valid_username(&username) {
+        return Err(AppError::NotFound);
+    }
+    let user = User::by_username(&state.db, &username)
+        .await?
+        .ok_or(AppError::NotFound)?;
+
+    // Mirror the listing page's privacy gate so a direct hit to this endpoint
+    // can't page through a private user's articles.
+    if !user.public {
+        let identity = match jar.get("session") {
+            Some(cookie) => Session::validate(&state.db, cookie.value()).await?,
+            None => None,
+        };
+        let allowed = match identity {
+            Some(Identity::Admin) => true,
+            Some(Identity::User(id)) => id == user.id,
+            None => false,
+        };
+        if !allowed {
+            return Err(AppError::NotFound);
+        }
+    }
+
+    let page = params.page.unwrap_or(1).max(1);
+    let per_page = 12;
+    let offset = (page - 1) * per_page;
+    let category = params.category.as_deref().filter(|c| !c.is_empty());
+
+    let articles =
+        GeneratedArticle::published_for_user(&state.db, user.id, per_page + 1, offset, category)
+            .await?;
+    let has_more = articles.len() as i64 > per_page;
+    let articles: Vec<_> = articles.into_iter().take(per_page as usize).collect();
+
+    Ok(super::api::ArticleListPartial {
+        articles,
+        active_category: category.map(|s| s.to_string()),
+        page,
+        has_more,
+        load_more_base: format!("/api/user-news/@{}/articles", user.username),
+    })
 }
 
 pub async fn list_view(
@@ -244,6 +304,7 @@ pub async fn list_view(
     let categories =
         GeneratedArticle::published_categories_for_list(&state.db, list.id).await?;
 
+    let load_more_base = format!("/api/list/{}/articles", list.slug);
     Ok(ListTemplate {
         list_name: list.name,
         list_slug: list.slug,
@@ -252,6 +313,7 @@ pub async fn list_view(
         active_category: category.map(|s| s.to_string()),
         page,
         has_more,
+        load_more_base,
     })
 }
 

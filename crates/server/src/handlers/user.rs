@@ -13,7 +13,7 @@ use crate::error::AppError;
 use crate::handlers::admin::{FeedWithLists, ImportErrorsTemplate};
 use crate::models::article_interaction::ArticleInteraction;
 use crate::models::feed::{CreateFeed, Feed};
-use crate::models::generated_article::GeneratedArticle;
+use crate::models::generated_article::{ArticleWithOwner, GeneratedArticle};
 use crate::models::list::{CreateList, List};
 use crate::models::session::{Identity, Session};
 use crate::models::source_article::SourceArticle;
@@ -37,13 +37,19 @@ pub struct UserDashboardTemplate {
     pub user: User,
     pub feeds: Vec<FeedWithLists>,
     pub lists: Vec<List>,
-    pub drafts: Vec<GeneratedArticle>,
-    pub published: Vec<GeneratedArticle>,
+    pub drafts: Vec<ArticleWithOwner>,
+    pub published: Vec<ArticleWithOwner>,
     pub liked: Vec<GeneratedArticle>,
     pub read_later: Vec<GeneratedArticle>,
     pub categories: Vec<String>,
     pub server_llm_enabled: bool,
     pub languages: &'static [(&'static str, &'static str)],
+    // Shared with templates/partials/desk/{drafts,published}_table.html.
+    pub article_api_prefix: &'static str,
+    pub bulk_publish_url: &'static str,
+    pub bulk_unpublish_url: &'static str,
+    pub show_owner: bool,
+    pub admin_scope: bool,
 }
 
 #[derive(Deserialize)]
@@ -158,8 +164,18 @@ pub async fn dashboard(
         });
     }
 
-    let drafts = GeneratedArticle::drafts_for_user(&state.db, uid).await?;
-    let published = GeneratedArticle::all_published_for_user(&state.db, uid).await?;
+    // Wrap in ArticleWithOwner (owner_username: None) so the drafts/published
+    // tables can share one partial with the admin dashboard.
+    let drafts = GeneratedArticle::drafts_for_user(&state.db, uid)
+        .await?
+        .into_iter()
+        .map(|article| ArticleWithOwner { article, owner_username: None })
+        .collect();
+    let published = GeneratedArticle::all_published_for_user(&state.db, uid)
+        .await?
+        .into_iter()
+        .map(|article| ArticleWithOwner { article, owner_username: None })
+        .collect();
     let liked = ArticleInteraction::liked_for_user(&state.db, uid).await?;
     let read_later = ArticleInteraction::read_later_for_user(&state.db, uid).await?;
     let categories = GeneratedArticle::all_categories(&state.db).await?;
@@ -175,6 +191,11 @@ pub async fn dashboard(
         categories,
         server_llm_enabled: SERVER_LLM_ENABLED,
         languages: SUPPORTED_LANGUAGES,
+        article_api_prefix: "/api/user/article",
+        bulk_publish_url: "/api/user/articles/bulk-publish",
+        bulk_unpublish_url: "/api/user/articles/bulk-unpublish",
+        show_owner: false,
+        admin_scope: false,
     })
 }
 

@@ -41,6 +41,12 @@ pub struct DashboardTemplate {
     pub categories: Vec<String>,
     pub server_llm_enabled: bool,
     pub auto_publish: bool,
+    // Shared with templates/partials/desk/{drafts,published}_table.html.
+    pub article_api_prefix: &'static str,
+    pub bulk_publish_url: &'static str,
+    pub bulk_unpublish_url: &'static str,
+    pub show_owner: bool,
+    pub admin_scope: bool,
 }
 
 pub struct FeedWithLists {
@@ -84,6 +90,11 @@ pub async fn dashboard(
         categories,
         server_llm_enabled: SERVER_LLM_ENABLED,
         auto_publish,
+        article_api_prefix: "/api/article",
+        bulk_publish_url: "/api/articles/bulk-publish",
+        bulk_unpublish_url: "/api/articles/bulk-unpublish",
+        show_owner: true,
+        admin_scope: true,
     })
 }
 

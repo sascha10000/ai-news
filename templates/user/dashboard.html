@@ -377,68 +377,7 @@
     {% if drafts.is_empty() %}
     <p class="empty">No drafts.</p>
     {% else %}
-    <div class="bulk-toolbar">
-        <button hx-post="/api/user/articles/bulk-publish"
-                hx-include="input.draft-check:checked"
-                hx-target="#publish-all-result"
-                hx-confirm="Publish selected drafts?"
-                class="btn btn-sm btn-success">
-            Publish selected
-        </button>
-        <span class="hint">Tick rows in the first column to bulk-publish.</span>
-    </div>
-    <table class="drafts-table">
-        <thead>
-            <tr>
-                <th class="check-col"><input type="checkbox" onclick="document.querySelectorAll('input.draft-check').forEach(c=>c.checked=this.checked)"></th>
-                <th>Title</th>
-                <th>Category</th>
-                <th>Generated</th>
-                <th>Actions</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for draft in drafts %}
-            <tr>
-                <td class="check-col"><input type="checkbox" class="draft-check" name="ids" value="{{ draft.id }}"></td>
-                <td><a href="/article/{{ draft.slug }}">{{ draft.title }}</a></td>
-                <td id="draft-category-{{ draft.id }}">
-                    <form hx-post="/api/user/article/{{ draft.id }}/category"
-                          hx-target="#draft-category-{{ draft.id }}"
-                          hx-swap="innerHTML">
-                        <input type="text"
-                               name="category"
-                               list="known-categories"
-                               value="{% if let Some(c) = draft.category %}{{ c }}{% endif %}"
-                               placeholder="Pick or type new…"
-                               class="category-input"
-                               onchange="this.form.requestSubmit()">
-                    </form>
-                </td>
-                <td>{{ draft.generated_at }}</td>
-                <td id="draft-actions-{{ draft.id }}">
-                    <button hx-post="/api/user/article/{{ draft.id }}/publish"
-                            hx-target="#draft-actions-{{ draft.id }}"
-                            class="btn btn-sm btn-success">
-                        Publish
-                    </button>
-                    <button hx-post="/api/user/article/{{ draft.id }}/reject"
-                            hx-target="#draft-actions-{{ draft.id }}"
-                            class="btn btn-sm btn-danger">
-                        Reject
-                    </button>
-                    <button hx-post="/api/user/article/{{ draft.id }}/delete"
-                            hx-target="closest tr"
-                            hx-swap="outerHTML"
-                            hx-confirm="Delete this article permanently? Its source articles will become eligible for regeneration."
-                            class="btn btn-sm btn-danger">
-                        Delete
-                    </button>
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+    {% include "partials/desk/drafts_table.html" %}
     {% endif %}
 </section>
 
@@ -448,52 +387,7 @@
     {% if published.is_empty() %}
     <p class="empty">No published articles yet.</p>
     {% else %}
-    <div class="bulk-toolbar">
-        <button hx-post="/api/user/articles/bulk-unpublish"
-                hx-include="input.published-check:checked"
-                hx-target="#bulk-unpublish-result"
-                hx-confirm="Unpublish selected articles? They will return to drafts."
-                class="btn btn-sm btn-danger">
-            Unpublish selected
-        </button>
-        <span class="hint">Tick rows in the first column to bulk-unpublish.</span>
-    </div>
-    <table class="drafts-table">
-        <thead>
-            <tr>
-                <th class="check-col"><input type="checkbox" onclick="document.querySelectorAll('input.published-check').forEach(c=>c.checked=this.checked)"></th>
-                <th>Title</th>
-                <th>Category</th>
-                <th>Published</th>
-                <th>Actions</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for article in published %}
-            <tr>
-                <td class="check-col"><input type="checkbox" class="published-check" name="ids" value="{{ article.id }}"></td>
-                <td><a href="/article/{{ article.slug }}">{{ article.title }}</a></td>
-                <td>{{ article.category.as_deref().unwrap_or("—") }}</td>
-                <td>{{ article.formatted_published_at() }}</td>
-                <td id="published-actions-{{ article.id }}">
-                    <button hx-post="/api/user/article/{{ article.id }}/unpublish"
-                            hx-target="#published-actions-{{ article.id }}"
-                            hx-confirm="Unpublish this article? It will return to drafts."
-                            class="btn btn-sm btn-danger">
-                        Unpublish
-                    </button>
-                    <button hx-post="/api/user/article/{{ article.id }}/delete"
-                            hx-target="closest tr"
-                            hx-swap="outerHTML"
-                            hx-confirm="Delete this article permanently? Its source articles will become eligible for regeneration."
-                            class="btn btn-sm btn-danger">
-                        Delete
-                    </button>
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+    {% include "partials/desk/published_table.html" %}
     {% endif %}
 </section>
 

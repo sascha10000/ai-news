@@ -18,26 +18,13 @@
 {% if articles.is_empty() %}
 <p class="empty">No published articles yet. Check back soon.</p>
 {% else %}
-<div class="view-toggle" role="group" aria-label="Article layout">
-    <button type="button" class="view-toggle-btn" data-view-target="cards">Cards</button>
-    <span class="view-toggle-sep" aria-hidden="true">/</span>
-    <button type="button" class="view-toggle-btn" data-view-target="rows">Rows</button>
-</div>
+{% include "partials/view_toggle.html" %}
 <div id="article-list" class="article-grid">
     {% for article in articles %}
     {% include "partials/article_card.html" %}
     {% endfor %}
 </div>
 
-{% if has_more %}
-<div class="load-more" id="load-more-btn">
-    <button hx-get="/api/articles?page={{ page + 1 }}{% if let Some(cat) = active_category %}&amp;category={{ cat }}{% endif %}"
-            hx-target="#article-list"
-            hx-swap="beforeend"
-            class="btn">
-        Load more
-    </button>
-</div>
-{% endif %}
+{% include "partials/load_more.html" %}
 {% endif %}
 {% endblock %}

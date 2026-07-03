@@ -20,10 +20,13 @@
 {% if articles.is_empty() %}
 <p class="empty">No published articles yet from @{{ username }}.</p>
 {% else %}
+{% include "partials/view_toggle.html" %}
 <div id="article-list" class="article-grid">
     {% for article in articles %}
     {% include "partials/article_card.html" %}
     {% endfor %}
 </div>
+
+{% include "partials/load_more.html" %}
 {% endif %}
 {% endblock %}

@@ -1,0 +1,74 @@
+<div class="bulk-toolbar">
+    <button hx-post="{{ bulk_publish_url }}"
+            hx-include="input.draft-check:checked"
+            hx-target="#publish-all-result"
+            hx-confirm="Publish selected drafts?"
+            class="btn btn-sm btn-success">
+        Publish selected
+    </button>
+    <span class="hint">Tick rows in the first column to bulk-publish.</span>
+</div>
+<table class="drafts-table">
+    <thead>
+        <tr>
+            <th class="check-col"><input type="checkbox" onclick="document.querySelectorAll('input.draft-check').forEach(c=>c.checked=this.checked)"></th>
+            {% if show_owner %}<th>Owner</th>{% endif %}
+            <th>Title</th>
+            <th>Category</th>
+            <th>Generated</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for item in drafts %}
+        <tr>
+            <td class="check-col">{% if !admin_scope || item.article.user_id.is_none() %}<input type="checkbox" class="draft-check" name="ids" value="{{ item.article.id }}">{% endif %}</td>
+            {% if show_owner %}
+            <td>{% if let Some(u) = item.owner_username %}<span class="badge category">@{{ u }}</span>{% else %}<span class="badge">global</span>{% endif %}</td>
+            {% endif %}
+            <td><a href="/article/{{ item.article.slug }}">{{ item.article.title }}</a></td>
+            <td id="draft-category-{{ item.article.id }}">
+                {% if !admin_scope || item.article.user_id.is_none() %}
+                <form hx-post="{{ article_api_prefix }}/{{ item.article.id }}/category"
+                      hx-target="#draft-category-{{ item.article.id }}"
+                      hx-swap="innerHTML">
+                    <input type="text"
+                           name="category"
+                           list="known-categories"
+                           value="{% if let Some(c) = item.article.category %}{{ c }}{% endif %}"
+                           placeholder="Pick or type new…"
+                           class="category-input"
+                           onchange="this.form.requestSubmit()">
+                </form>
+                {% else %}
+                {{ item.article.category.as_deref().unwrap_or("—") }}
+                {% endif %}
+            </td>
+            <td>{{ item.article.generated_at }}</td>
+            <td id="draft-actions-{{ item.article.id }}">
+                {% if !admin_scope || item.article.user_id.is_none() %}
+                <button hx-post="{{ article_api_prefix }}/{{ item.article.id }}/publish"
+                        hx-target="#draft-actions-{{ item.article.id }}"
+                        class="btn btn-sm btn-success">
+                    Publish
+                </button>
+                <button hx-post="{{ article_api_prefix }}/{{ item.article.id }}/reject"
+                        hx-target="#draft-actions-{{ item.article.id }}"
+                        class="btn btn-sm btn-danger">
+                    Reject
+                </button>
+                <button hx-post="{{ article_api_prefix }}/{{ item.article.id }}/delete"
+                        hx-target="closest tr"
+                        hx-swap="outerHTML"
+                        hx-confirm="Delete this article permanently? Its source articles will become eligible for regeneration."
+                        class="btn btn-sm btn-danger">
+                    Delete
+                </button>
+                {% else %}
+                <span class="hint">user-owned</span>
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>

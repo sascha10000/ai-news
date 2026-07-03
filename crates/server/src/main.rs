@@ -92,6 +92,7 @@ async fn main() {
         .route("/impressum", get(handlers::public::impressum))
         .route("/datenschutz", get(handlers::public::datenschutz))
         .route("/api/list/{slug}/articles", get(handlers::api::list_articles_page))
+        .route("/api/user-news/{username}/articles", get(handlers::public::user_news_articles_page))
         // Auth routes
         .route("/login", get(handlers::auth::login_page))
         .route("/login", post(handlers::auth::login))

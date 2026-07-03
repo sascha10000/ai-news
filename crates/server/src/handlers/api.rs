@@ -23,16 +23,7 @@ pub struct ArticleListPartial {
     pub active_category: Option<String>,
     pub page: i64,
     pub has_more: bool,
-}
-
-#[derive(Template, WebTemplate)]
-#[template(path = "partials/list_article_list.html")]
-pub struct ListArticleListPartial {
-    pub list_slug: String,
-    pub articles: Vec<GeneratedArticle>,
-    pub active_category: Option<String>,
-    pub page: i64,
-    pub has_more: bool,
+    pub load_more_base: String,
 }
 
 pub async fn fetch_all_feeds(
@@ -122,6 +113,7 @@ pub async fn article_list(
         active_category: category.map(|s| s.to_string()),
         page,
         has_more,
+        load_more_base: "/api/articles".to_string(),
     })
 }
 
@@ -129,7 +121,7 @@ pub async fn list_articles_page(
     State(state): State<AppState>,
     axum::extract::Path(slug): axum::extract::Path<String>,
     Query(params): Query<Pagination>,
-) -> Result<ListArticleListPartial, AppError> {
+) -> Result<ArticleListPartial, AppError> {
     let list = crate::models::list::List::by_slug_global(&state.db, &slug)
         .await?
         .ok_or(AppError::NotFound)?;
@@ -150,12 +142,12 @@ pub async fn list_articles_page(
     let has_more = articles.len() as i64 > per_page;
     let articles: Vec<_> = articles.into_iter().take(per_page as usize).collect();
 
-    Ok(ListArticleListPartial {
-        list_slug: list.slug,
+    Ok(ArticleListPartial {
         articles,
         active_category: category.map(|s| s.to_string()),
         page,
         has_more,
+        load_more_base: format!("/api/list/{}/articles", list.slug),
     })
 }
 
