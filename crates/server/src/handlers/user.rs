@@ -190,10 +190,38 @@ pub async fn toggle_public(
     RequireUser(uid): RequireUser,
     State(state): State<AppState>,
     Form(input): Form<TogglePublicForm>,
-) -> Result<Redirect, AppError> {
+) -> Result<Html<String>, AppError> {
     let public = input.public.is_some();
     User::set_public(&state.db, uid, public).await?;
-    Ok(Redirect::to("/user"))
+    let msg = if public {
+        "Saved &mdash; your news page is now public."
+    } else {
+        "Saved &mdash; your news page is now private."
+    };
+    Ok(Html(msg.to_string()))
+}
+
+#[derive(Deserialize)]
+pub struct SetAutoPublishForm {
+    // HTML checkboxes only submit when checked, so `enabled` being absent
+    // means "off" and any present value means "on".
+    #[serde(default)]
+    pub enabled: Option<String>,
+}
+
+pub async fn set_auto_publish(
+    RequireUser(uid): RequireUser,
+    State(state): State<AppState>,
+    Form(input): Form<SetAutoPublishForm>,
+) -> Result<Html<String>, AppError> {
+    let enabled = input.enabled.is_some();
+    User::set_auto_publish(&state.db, uid, enabled).await?;
+    let msg = if enabled {
+        "On &mdash; new articles skip drafts and publish straight to your news page."
+    } else {
+        "Off &mdash; new articles land in your drafts for review."
+    };
+    Ok(Html(msg.to_string()))
 }
 
 #[derive(Deserialize)]
@@ -206,7 +234,7 @@ pub async fn set_language(
     RequireUser(uid): RequireUser,
     State(state): State<AppState>,
     Form(input): Form<SetLanguageForm>,
-) -> Result<Redirect, AppError> {
+) -> Result<Html<String>, AppError> {
     let trimmed = input.language.trim();
     let value = if trimmed.is_empty() {
         None
@@ -218,7 +246,11 @@ pub async fn set_language(
         )));
     };
     User::set_language(&state.db, uid, value).await?;
-    Ok(Redirect::to("/user#sec-operations"))
+    let msg = match value.and_then(language_label) {
+        Some(label) => format!("Saved &mdash; summaries will target {label}."),
+        None => "Saved &mdash; no preference; the LLM keeps the source language.".to_string(),
+    };
+    Ok(Html(msg))
 }
 
 // ---------- feeds ----------

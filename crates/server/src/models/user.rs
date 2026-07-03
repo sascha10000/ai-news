@@ -14,6 +14,7 @@ pub struct User {
     pub public: bool,
     pub created_at: String,
     pub language: Option<String>,
+    pub auto_publish: bool,
 }
 
 // Language table lives in `ai_news_core` so client & server stay in sync;
@@ -76,7 +77,7 @@ impl User {
 
     pub async fn by_id(pool: &SqlitePool, id: i64) -> Result<Option<User>, sqlx::Error> {
         sqlx::query_as::<_, User>(
-            "SELECT id, username, public, created_at, language FROM users WHERE id = ?",
+            "SELECT id, username, public, created_at, language, auto_publish FROM users WHERE id = ?",
         )
         .bind(id)
         .fetch_optional(pool)
@@ -88,7 +89,7 @@ impl User {
         username: &str,
     ) -> Result<Option<User>, sqlx::Error> {
         sqlx::query_as::<_, User>(
-            "SELECT id, username, public, created_at, language FROM users WHERE username = ?",
+            "SELECT id, username, public, created_at, language, auto_publish FROM users WHERE username = ?",
         )
         .bind(username.to_lowercase())
         .fetch_optional(pool)
@@ -100,16 +101,16 @@ impl User {
         username: &str,
         password: &str,
     ) -> Result<Option<User>, sqlx::Error> {
-        let row: Option<(i64, String, bool, String, Option<String>, String)> = sqlx::query_as(
-            "SELECT id, username, public, created_at, language, password_hash FROM users WHERE username = ?",
+        let row: Option<(i64, String, bool, String, Option<String>, bool, String)> = sqlx::query_as(
+            "SELECT id, username, public, created_at, language, auto_publish, password_hash FROM users WHERE username = ?",
         )
         .bind(username.to_lowercase())
         .fetch_optional(pool)
         .await?;
 
-        Ok(row.and_then(|(id, username, public, created_at, language, hash)| {
+        Ok(row.and_then(|(id, username, public, created_at, language, auto_publish, hash)| {
             if verify_password(password, &hash) {
-                Some(User { id, username, public, created_at, language })
+                Some(User { id, username, public, created_at, language, auto_publish })
             } else {
                 None
             }
@@ -155,6 +156,31 @@ impl User {
                 .fetch_optional(pool)
                 .await?;
         Ok(row.and_then(|r| r.0))
+    }
+
+    pub async fn set_auto_publish(
+        pool: &SqlitePool,
+        id: i64,
+        enabled: bool,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query("UPDATE users SET auto_publish = ? WHERE id = ?")
+            .bind(enabled)
+            .bind(id)
+            .execute(pool)
+            .await?;
+        Ok(())
+    }
+
+    /// Lightweight lookup used by ingest to decide whether this user's newly
+    /// ingested articles skip the draft queue. A missing user (deleted mid-run)
+    /// defaults to `false` so we never publish without an explicit opt-in.
+    pub async fn auto_publish_of(pool: &SqlitePool, id: i64) -> Result<bool, sqlx::Error> {
+        let row: Option<(bool,)> =
+            sqlx::query_as("SELECT auto_publish FROM users WHERE id = ?")
+                .bind(id)
+                .fetch_optional(pool)
+                .await?;
+        Ok(row.map(|r| r.0).unwrap_or(false))
     }
 }
 

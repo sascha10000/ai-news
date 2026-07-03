@@ -114,7 +114,10 @@
     <p class="empty">Article generation runs from the local <code>client</code> CLI when the server-llm feature is off.</p>
     {% endif %}
 
-    <form action="/user/settings/language" method="post" class="add-feed-form">
+    <form hx-post="/user/settings/language"
+          hx-target="#language-status"
+          hx-swap="innerHTML"
+          class="add-feed-form">
         <label for="language">Summary language</label>
         <select id="language" name="language">
             <option value=""{% if user.language.is_none() %} selected{% endif %}>No preference</option>
@@ -123,7 +126,25 @@
             {% endfor %}
         </select>
         <button type="submit" class="btn btn-sm">Save</button>
-        <span class="hint">Applied when the LLM drafts summaries for your lists.</span>
+        <span id="language-status" class="hint">Applied when the LLM drafts summaries for your lists.</span>
+    </form>
+
+    <form hx-post="/user/settings/auto-publish"
+          hx-target="#auto-publish-status"
+          hx-swap="innerHTML"
+          class="add-feed-form">
+        <label class="check-pill">
+            <input type="checkbox" name="enabled" value="1"{% if user.auto_publish %} checked{% endif %}>
+            Auto-publish new articles
+        </label>
+        <button type="submit" class="btn btn-sm">Save</button>
+        <span id="auto-publish-status" class="hint">
+            {% if user.auto_publish %}
+            On &mdash; new articles skip drafts and publish straight to your news page.
+            {% else %}
+            Off &mdash; new articles land in your drafts for review.
+            {% endif %}
+        </span>
     </form>
 </section>
 
@@ -136,12 +157,16 @@
         {% else %}It is currently <strong>private</strong>, so only you (and the admin) can open it.
         {% endif %}
         Article links you share stay accessible regardless of this setting.</p>
-    <form action="/user/settings/public" method="post" class="add-feed-form">
+    <form hx-post="/user/settings/public"
+          hx-target="#public-status"
+          hx-swap="innerHTML"
+          class="add-feed-form">
         <label class="check-pill">
             <input type="checkbox" name="public" value="1"{% if user.public %} checked{% endif %}>
             My news page is public
         </label>
         <button type="submit" class="btn btn-sm">Save</button>
+        <span id="public-status" class="hint"></span>
     </form>
 </section>
 
@@ -149,11 +174,16 @@
     <h2>Clusters <span class="eyebrow">lists &amp; assignments</span></h2>
     <p class="hint">Lists pre-cluster your feeds. Generation runs per-list so the LLM only sees feeds you grouped together.</p>
 
-    <form action="/user/lists" method="post" class="add-feed-form">
+    <form hx-post="/user/lists"
+          hx-target="#lists-panel"
+          hx-select="#lists-panel"
+          hx-swap="outerHTML"
+          class="add-feed-form">
         <input type="text" name="name" placeholder="List name (e.g. AI &amp; ML)" required>
         <button type="submit" class="btn">Add List</button>
     </form>
 
+    <div id="lists-panel">
     {% if lists.is_empty() %}
     <p class="empty">No lists yet.</p>
     {% else %}
@@ -181,7 +211,11 @@
                         Generate
                     </button>
                     {% endif %}
-                    <form action="/user/lists/{{ list.id }}/delete" method="post" style="display:inline">
+                    <form hx-post="/user/lists/{{ list.id }}/delete"
+                          hx-target="#lists-panel"
+                          hx-select="#lists-panel"
+                          hx-swap="outerHTML"
+                          style="display:inline">
                         <button type="submit" class="btn btn-sm btn-danger">Delete</button>
                     </form>
                 </td>
@@ -190,11 +224,16 @@
         </tbody>
     </table>
     {% endif %}
+    </div>
 </section>
 
 <section class="desk-section" id="sec-wire">
     <h2>Wire <span class="eyebrow">your RSS feeds &amp; sources</span></h2>
-    <form action="/user/feeds" method="post" class="add-feed-form">
+    <form hx-post="/user/feeds"
+          hx-target="#feeds-panel"
+          hx-select="#feeds-panel"
+          hx-swap="outerHTML"
+          class="add-feed-form">
         <input type="text" name="name" placeholder="Feed name" required>
         <input type="url" name="url" placeholder="https://example.com/rss" required>
         <button type="submit" class="btn">Add Feed</button>
@@ -238,11 +277,17 @@
         <button type="submit" class="btn">Import OPML</button>
     </form>
 
+    <div id="feeds-panel">
     {% if feeds.is_empty() %}
     <p class="empty">No feeds yet.</p>
     {% else %}
     {% if !lists.is_empty() %}
-    <form id="bulk-feed-form" action="/user/feeds/lists/bulk" method="post" class="bulk-toolbar">
+    <form id="bulk-feed-form"
+          hx-post="/user/feeds/lists/bulk"
+          hx-target="#feeds-panel"
+          hx-select="#feeds-panel"
+          hx-swap="outerHTML"
+          class="bulk-toolbar">
         <select name="list_id" required>
             <option value="">Choose list…</option>
             {% for l in lists %}
@@ -277,13 +322,21 @@
                     {% for l in item.lists %}
                     <span class="list-tag">
                         {{ l.name }}
-                        <form action="/user/feeds/{{ item.feed.id }}/lists/{{ l.id }}/delete" method="post" style="display:inline">
+                        <form hx-post="/user/feeds/{{ item.feed.id }}/lists/{{ l.id }}/delete"
+                              hx-target="#feeds-panel"
+                              hx-select="#feeds-panel"
+                              hx-swap="outerHTML"
+                              style="display:inline">
                             <button type="submit" class="list-tag-remove" title="Remove from {{ l.name }}">&times;</button>
                         </form>
                     </span>
                     {% endfor %}
                     {% if !lists.is_empty() %}
-                    <form action="/user/feeds/{{ item.feed.id }}/lists" method="post" class="list-assign-form">
+                    <form hx-post="/user/feeds/{{ item.feed.id }}/lists"
+                          hx-target="#feeds-panel"
+                          hx-select="#feeds-panel"
+                          hx-swap="outerHTML"
+                          class="list-assign-form">
                         <select name="list_id" onchange="this.form.requestSubmit()">
                             <option value="">+ add to list…</option>
                             {% for l in lists %}
@@ -302,7 +355,11 @@
                             class="btn btn-sm">
                         Fetch
                     </button>
-                    <form action="/user/feeds/{{ item.feed.id }}/delete" method="post" style="display:inline">
+                    <form hx-post="/user/feeds/{{ item.feed.id }}/delete"
+                          hx-target="#feeds-panel"
+                          hx-select="#feeds-panel"
+                          hx-swap="outerHTML"
+                          style="display:inline">
                         <button type="submit" class="btn btn-sm btn-danger">Delete</button>
                     </form>
                 </td>
@@ -311,6 +368,7 @@
         </tbody>
     </table>
     {% endif %}
+    </div>
 </section>
 
 <section class="desk-section" id="sec-drafts">

@@ -5,6 +5,7 @@ use crate::models::app_settings::AppSettings;
 use crate::models::citation::{GeneratedSentence, SentenceCitation};
 use crate::models::generated_article::GeneratedArticle;
 use crate::models::list::List;
+use crate::models::user::User;
 use ai_news_core::IngestArticlesRequest;
 use sqlx::SqlitePool;
 
@@ -14,6 +15,9 @@ pub async fn ingest_articles(
 ) -> Result<Vec<i64>, AppError> {
     let mut created = Vec::new();
     let mut owner_cache: HashMap<i64, Option<i64>> = HashMap::new();
+    // Per-user auto-publish flags, cached so a batch touching one user's lists
+    // doesn't re-query the users table for every article.
+    let mut user_auto_publish_cache: HashMap<i64, bool> = HashMap::new();
     let auto_publish = AppSettings::auto_publish(pool).await?;
 
     for article in req.articles {
@@ -58,9 +62,21 @@ pub async fn ingest_articles(
             }
         }
 
-        // Auto-publish only applies to global (admin-owned) articles so that
-        // user-owned drafts still go through the user's own review queue.
-        if auto_publish && user_id.is_none() {
+        // Auto-publish is decided per owner: global (admin-owned) articles use
+        // the global `app_settings` flag, while user-owned articles use that
+        // user's own per-user preference. Either way, publishing is opt-in.
+        let should_publish = match user_id {
+            None => auto_publish,
+            Some(uid) => match user_auto_publish_cache.get(&uid) {
+                Some(cached) => *cached,
+                None => {
+                    let enabled = User::auto_publish_of(pool, uid).await?;
+                    user_auto_publish_cache.insert(uid, enabled);
+                    enabled
+                }
+            },
+        };
+        if should_publish {
             GeneratedArticle::set_status(pool, id, "published").await?;
         }
 

@@ -106,6 +106,7 @@ async fn main() {
         .route("/user", get(handlers::user::dashboard))
         .route("/user/settings/public", post(handlers::user::toggle_public))
         .route("/user/settings/language", post(handlers::user::set_language))
+        .route("/user/settings/auto-publish", post(handlers::user::set_auto_publish))
         .route("/user/feeds", post(handlers::user::create_feed))
         .route("/user/feeds/import", post(handlers::user::import_feeds))
         .route("/user/feeds/import-opml", post(handlers::user::import_opml))
