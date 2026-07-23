@@ -168,6 +168,12 @@
         <button type="submit" class="btn btn-sm">Save</button>
         <span id="public-status" class="hint"></span>
     </form>
+
+    <h3>API access</h3>
+    <p class="hint">Connect an MCP client (e.g. Claude) to <code>/mcp</code> with
+        <code>Authorization: Bearer &lt;key&gt;</code>. The key reads published news only,
+        including your own news page even while it is private.</p>
+    {% include "partials/desk/api_key.html" %}
 </section>
 
 <section class="desk-section" id="sec-clusters">

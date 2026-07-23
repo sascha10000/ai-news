@@ -216,6 +216,73 @@ impl GeneratedArticle {
         Ok(rows.into_iter().map(|r| r.0).collect())
     }
 
+    /// Published articles the given viewer may see (global + their own),
+    /// with `published_at` dates inside [start, end]. Dates are `YYYY-MM-DD`
+    /// strings; `published_at` is TEXT from datetime('now'), so `date()`
+    /// comparison is correct.
+    pub async fn published_in_range(
+        pool: &SqlitePool,
+        start: &str,
+        end: &str,
+        viewer_user_id: i64,
+        limit: i64,
+    ) -> Result<Vec<GeneratedArticle>, sqlx::Error> {
+        sqlx::query_as::<_, GeneratedArticle>(
+            "SELECT ga.*, l.name AS list_name, l.slug AS list_slug \
+             FROM generated_articles ga LEFT JOIN lists l ON l.id = ga.list_id \
+             WHERE ga.status = 'published' AND (ga.user_id IS NULL OR ga.user_id = ?) \
+             AND date(ga.published_at) >= date(?) AND date(ga.published_at) <= date(?) \
+             ORDER BY ga.published_at DESC LIMIT ?",
+        )
+        .bind(viewer_user_id)
+        .bind(start)
+        .bind(end)
+        .bind(limit)
+        .fetch_all(pool)
+        .await
+    }
+
+    /// Published articles the given viewer may see (global + their own) in a
+    /// category, matched case-insensitively.
+    pub async fn published_by_category(
+        pool: &SqlitePool,
+        category: &str,
+        viewer_user_id: i64,
+        limit: i64,
+    ) -> Result<Vec<GeneratedArticle>, sqlx::Error> {
+        sqlx::query_as::<_, GeneratedArticle>(
+            "SELECT ga.*, l.name AS list_name, l.slug AS list_slug \
+             FROM generated_articles ga LEFT JOIN lists l ON l.id = ga.list_id \
+             WHERE ga.status = 'published' AND (ga.user_id IS NULL OR ga.user_id = ?) \
+             AND ga.category = ? COLLATE NOCASE \
+             ORDER BY ga.published_at DESC LIMIT ?",
+        )
+        .bind(viewer_user_id)
+        .bind(category)
+        .bind(limit)
+        .fetch_all(pool)
+        .await
+    }
+
+    /// Published articles of a list, regardless of owner. Callers must have
+    /// already checked the viewer may see the list (global, or their own).
+    pub async fn published_for_list_id(
+        pool: &SqlitePool,
+        list_id: i64,
+        limit: i64,
+    ) -> Result<Vec<GeneratedArticle>, sqlx::Error> {
+        sqlx::query_as::<_, GeneratedArticle>(
+            "SELECT ga.*, l.name AS list_name, l.slug AS list_slug \
+             FROM generated_articles ga LEFT JOIN lists l ON l.id = ga.list_id \
+             WHERE ga.status = 'published' AND ga.list_id = ? \
+             ORDER BY ga.published_at DESC LIMIT ?",
+        )
+        .bind(list_id)
+        .bind(limit)
+        .fetch_all(pool)
+        .await
+    }
+
     pub async fn all_categories(pool: &SqlitePool) -> Result<Vec<String>, sqlx::Error> {
         let rows: Vec<(String,)> = sqlx::query_as(
             "SELECT DISTINCT category FROM generated_articles \

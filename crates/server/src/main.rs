@@ -30,6 +30,7 @@ pub struct AppState {
     pub admin_username: String,
     pub admin_password: String,
     pub api_token: Option<String>,
+    pub public_base_url: Option<String>,
     pub max_source_age_days: u32,
     #[cfg(feature = "server-llm")]
     pub ollama_cfg: ai_news_generation::OllamaConfig,
@@ -68,6 +69,7 @@ async fn main() {
         admin_username: cfg.admin_username.clone(),
         admin_password: cfg.admin_password.clone(),
         api_token: cfg.api_token.clone(),
+        public_base_url: cfg.public_base_url.clone(),
         max_source_age_days: cfg.max_source_age_days,
         #[cfg(feature = "server-llm")]
         ollama_cfg,
@@ -108,6 +110,8 @@ async fn main() {
         .route("/user/settings/public", post(handlers::user::toggle_public))
         .route("/user/settings/language", post(handlers::user::set_language))
         .route("/user/settings/auto-publish", post(handlers::user::set_auto_publish))
+        .route("/user/api-key/generate", post(handlers::user::generate_api_key))
+        .route("/user/api-key/delete", post(handlers::user::revoke_api_key))
         .route("/user/feeds", post(handlers::user::create_feed))
         .route("/user/feeds/import", post(handlers::user::import_feeds))
         .route("/user/feeds/import-opml", post(handlers::user::import_opml))
@@ -162,7 +166,14 @@ async fn main() {
         .route("/api/sources/pending", get(handlers::remote::pending_sources))
         .route("/api/lists", get(handlers::remote::lists))
         .route("/api/users", get(handlers::remote::users))
-        .route("/api/articles/ingest", post(handlers::remote::ingest_articles));
+        .route("/api/articles/ingest", post(handlers::remote::ingest_articles))
+        // MCP endpoint (API-key protected, stateless Streamable HTTP)
+        .route(
+            "/mcp",
+            post(handlers::mcp::handle)
+                .get(handlers::mcp::method_not_allowed)
+                .delete(handlers::mcp::method_not_allowed),
+        );
 
     #[cfg(feature = "server-llm")]
     let app = app

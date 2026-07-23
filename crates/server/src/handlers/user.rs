@@ -11,6 +11,7 @@ use time::Duration;
 
 use crate::error::AppError;
 use crate::handlers::admin::{FeedWithLists, ImportErrorsTemplate};
+use crate::models::api_key::ApiKey;
 use crate::models::article_interaction::ArticleInteraction;
 use crate::models::feed::{CreateFeed, Feed};
 use crate::models::generated_article::{ArticleWithOwner, GeneratedArticle};
@@ -50,6 +51,8 @@ pub struct UserDashboardTemplate {
     pub bulk_unpublish_url: &'static str,
     pub show_owner: bool,
     pub admin_scope: bool,
+    pub api_key: Option<ApiKey>,
+    pub new_key: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -179,6 +182,7 @@ pub async fn dashboard(
     let liked = ArticleInteraction::liked_for_user(&state.db, uid).await?;
     let read_later = ArticleInteraction::read_later_for_user(&state.db, uid).await?;
     let categories = GeneratedArticle::all_categories(&state.db).await?;
+    let api_key = ApiKey::find_for_user(&state.db, uid).await?;
 
     Ok(UserDashboardTemplate {
         user,
@@ -196,7 +200,33 @@ pub async fn dashboard(
         bulk_unpublish_url: "/api/user/articles/bulk-unpublish",
         show_owner: false,
         admin_scope: false,
+        api_key,
+        new_key: None,
     })
+}
+
+#[derive(Template, WebTemplate)]
+#[template(path = "partials/desk/api_key.html")]
+pub struct ApiKeyBlockTemplate {
+    pub api_key: Option<ApiKey>,
+    pub new_key: Option<String>,
+}
+
+pub async fn generate_api_key(
+    RequireUser(uid): RequireUser,
+    State(state): State<AppState>,
+) -> Result<ApiKeyBlockTemplate, AppError> {
+    let new_key = ApiKey::generate(&state.db, uid).await?;
+    let api_key = ApiKey::find_for_user(&state.db, uid).await?;
+    Ok(ApiKeyBlockTemplate { api_key, new_key: Some(new_key) })
+}
+
+pub async fn revoke_api_key(
+    RequireUser(uid): RequireUser,
+    State(state): State<AppState>,
+) -> Result<ApiKeyBlockTemplate, AppError> {
+    ApiKey::delete_for_user(&state.db, uid).await?;
+    Ok(ApiKeyBlockTemplate { api_key: None, new_key: None })
 }
 
 const SERVER_LLM_ENABLED: bool = cfg!(feature = "server-llm");

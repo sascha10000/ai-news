@@ -8,6 +8,7 @@ pub struct Config {
     pub admin_username: String,
     pub admin_password: String,
     pub api_token: Option<String>,
+    pub public_base_url: Option<String>,
     pub max_source_age_days: u32,
     #[cfg(feature = "server-llm")]
     pub ollama_host: String,
@@ -34,6 +35,10 @@ impl Config {
             admin_username: env::var("ADMIN_USERNAME").unwrap_or_else(|_| "admin".to_string()),
             admin_password: env::var("ADMIN_PASSWORD").expect("ADMIN_PASSWORD must be set in .env"),
             api_token: env::var("API_TOKEN").ok().filter(|s| !s.is_empty()),
+            public_base_url: env::var("PUBLIC_BASE_URL")
+                .ok()
+                .map(|s| s.trim_end_matches('/').to_string())
+                .filter(|s| !s.is_empty()),
             max_source_age_days: env::var("MAX_SOURCE_AGE_DAYS")
                 .ok()
                 .and_then(|v| v.parse().ok())

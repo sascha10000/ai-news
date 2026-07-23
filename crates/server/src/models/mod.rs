@@ -7,3 +7,4 @@ pub mod session;
 pub mod user;
 pub mod article_interaction;
 pub mod app_settings;
+pub mod api_key;

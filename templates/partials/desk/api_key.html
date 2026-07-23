@@ -1,0 +1,22 @@
+<div id="api-key-box">
+    {% if let Some(key) = new_key %}
+    <p class="hint"><strong>Copy your key now</strong> &mdash; it is shown only this once.</p>
+    <p><code>{{ key }}</code></p>
+    {% endif %}
+    {% if let Some(k) = api_key %}
+    {% if new_key.is_none() %}
+    <p class="hint">Active key <code>{{ k.key_prefix }}&hellip;</code> &mdash; created {{ k.created_at }}{% if let Some(used) = k.last_used_at %}, last used {{ used }}{% endif %}.</p>
+    {% endif %}
+    <div class="add-feed-form">
+        <button hx-post="/user/api-key/generate" hx-target="#api-key-box" hx-swap="outerHTML"
+                class="btn btn-sm" type="button">Regenerate key</button>
+        <button hx-post="/user/api-key/delete" hx-target="#api-key-box" hx-swap="outerHTML"
+                class="btn btn-sm" type="button">Revoke key</button>
+    </div>
+    {% else %}
+    <div class="add-feed-form">
+        <button hx-post="/user/api-key/generate" hx-target="#api-key-box" hx-swap="outerHTML"
+                class="btn btn-sm" type="button">Generate key</button>
+    </div>
+    {% endif %}
+</div>

@@ -197,6 +197,38 @@ impl axum::extract::FromRequestParts<AppState> for RequireApiToken {
     }
 }
 
+/// Extractor: validates `Authorization: Bearer ainews_…` against per-user API
+/// keys (see `models::api_key`) and yields the owning user's id. Used by the
+/// MCP endpoint, where the key also unlocks the owner's private content.
+pub struct RequireApiKey(pub i64);
+
+impl axum::extract::FromRequestParts<AppState> for RequireApiKey {
+    type Rejection = (StatusCode, [(axum::http::HeaderName, &'static str); 1], &'static str);
+
+    async fn from_request_parts(
+        parts: &mut axum::http::request::Parts,
+        state: &AppState,
+    ) -> Result<Self, Self::Rejection> {
+        let www_auth = || [(axum::http::header::WWW_AUTHENTICATE, "Bearer")];
+
+        let key = parts
+            .headers
+            .get("Authorization")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|h| h.strip_prefix("Bearer "))
+            .ok_or((StatusCode::UNAUTHORIZED, www_auth(), "Missing `Authorization: Bearer <api key>`"))?;
+
+        match crate::models::api_key::ApiKey::user_id_for_key(&state.db, key).await {
+            Ok(Some(user_id)) => Ok(RequireApiKey(user_id)),
+            Ok(None) => Err((StatusCode::UNAUTHORIZED, www_auth(), "Invalid API key")),
+            Err(e) => {
+                tracing::error!("API key lookup failed: {e}");
+                Err((StatusCode::INTERNAL_SERVER_ERROR, www_auth(), "Internal error"))
+            }
+        }
+    }
+}
+
 fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
     if a.len() != b.len() {
         return false;
